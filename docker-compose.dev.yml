@@ -1,0 +1,95 @@
+# ==============================================================================
+# Docker Compose : DÉVELOPPEMENT LOCAL AVEC RECHARGEMENT À CHAUD
+# Commande : docker compose -f docker-compose.dev.yml up -d --build
+# ==============================================================================
+
+services:
+  # API FastAPI en mode Développement avec Bind Mount
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: kolix_api_dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Synchronisation en direct du code local sans réinstallation
+      - .:/app
+      # Conserver le .venv du conteneur
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kolix-dev-net
+
+  # Base de Données PostgreSQL 17 (Port hôte 5433 pour éviter conflit avec PostgreSQL local 5432)
+  db:
+    image: postgres:17-alpine
+    container_name: kolix_postgres_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kolix_admin
+      POSTGRES_PASSWORD: kolix_secure_pass_2026
+      POSTGRES_DB: kolix_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kolix_admin -d kolix_db"]
+      interval: 4s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kolix-dev-net
+
+  # Cache & Queues Redis 7
+  redis:
+    image: redis:7-alpine
+    container_name: kolix_redis_dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 4s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kolix-dev-net
+
+  # Stockage d'Objets S3 Local MinIO (Image alpine/minio:latest-release officielle et publique)
+  minio:
+    image: alpine/minio:latest-release
+    container_name: kolix_minio_dev
+    user: root
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio_kolix
+      MINIO_ROOT_PASSWORD: minio_kolix_secure_key
+    ports:
+      - "9000:9000"     # API S3
+      - "9001:9001"     # Interface Web MinIO Console
+    volumes:
+      - miniodata_dev:/data
+    networks:
+      - kolix-dev-net
+
+networks:
+  kolix-dev-net:
+    driver: bridge
+
+volumes:
+  pgdata_dev:
+  redisdata_dev:
+  miniodata_dev:

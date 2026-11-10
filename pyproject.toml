@@ -1,0 +1,53 @@
+[project]
+name = "kolix-backend"
+version = "1.0.0"
+description = "FastAPI Asynchronous Backend Engine for Kolix SaaS COD Platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Framework HTTP & Serveur ASGI
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.31.0",
+    "pydantic[email]>=2.9.2",
+    "pydantic-settings>=2.5.2",
+
+    # Base de Données & ORM Asynchrone
+    "sqlalchemy[asyncio]>=2.0.35",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.3",
+    "psycopg2-binary>=2.9.9",
+
+    # Sécurité & Cryptographie
+    "pwdlib[argon2]>=0.2.1",
+    "argon2-cffi>=23.1.0",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.12",
+    "cryptography>=43.0.1",
+
+    # Cache, Session & File Asynchrone
+    "redis>=5.1.0",
+    "arq>=0.26.1",
+
+    # Stockage S3
+    "aioboto3>=13.1.1",
+    "boto3>=1.35.25",
+
+    # IA & LLM
+    "litellm>=1.49.0",
+
+    # Utilitaires & Exportation
+    "structlog>=24.4.0",
+    "httpx>=0.27.2",
+    "openpyxl>=3.1.5",
+    "qrcode[pil]>=7.4.2",
+    "slowapi>=0.1.9"
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.6.8",
+    "mypy>=1.11.2"
+]
+

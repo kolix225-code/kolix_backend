@@ -1,0 +1,162 @@
+# ==============================================================================
+# Docker Compose : DÉPLOIEMENT PRODUCTION HAUTE DISPONIBILITÉ
+# Commande : docker compose -f docker-compose.prod.yml up -d --build
+# ==============================================================================
+
+services:
+  # Passerelle Inverse Nginx avec Protection & Rate-Limiting
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: kolix_gateway_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - kolix-public-net
+      - kolix-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Moteur API FastAPI Multi-Workers
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: kolix_api_prod
+    restart: always
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--lifespan", "on"]
+    env_file:
+      - .env.prod
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - kolix-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Worker Asynchrone (Tâches planifiées, SMS, OTP, Arq)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: kolix_worker_prod
+    restart: always
+    command: ["arq", "app.workers.worker.WorkerSettings"]
+    env_file:
+      - .env.prod
+    depends_on:
+      - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+    networks:
+      - kolix-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+
+  # Base de Données PostgreSQL 17 (Réseau interne isolé - Aucun port public exposé)
+  db:
+    image: postgres:17-alpine
+    container_name: kolix_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kolix_prod_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-REPLACE_WITH_VERY_STRONG_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-kolix_production}
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10MB
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kolix_prod_admin} -d ${POSTGRES_DB:-kolix_production}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kolix-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Redis 7 Haute Performance avec Persistance AOF + RDB
+  redis:
+    image: redis:7-alpine
+    container_name: kolix_redis_prod
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-kolix_redis_prod_secret}", "--appendonly", "yes"]
+    volumes:
+      - redisdata_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-kolix_redis_prod_secret}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kolix-internal-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+
+networks:
+  kolix-public-net:
+    driver: bridge
+  kolix-internal-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:

@@ -1,0 +1,39 @@
+# Alias direct vers docker-compose.prod.yml pour le déploiement
+# Usage : docker compose -f docker-compose.deploy.yml up -d --build
+
+services:
+  gateway:
+    extends:
+      file: docker-compose.prod.yml
+      service: gateway
+
+  api:
+    extends:
+      file: docker-compose.prod.yml
+      service: api
+
+  worker:
+    extends:
+      file: docker-compose.prod.yml
+      service: worker
+
+  db:
+    extends:
+      file: docker-compose.prod.yml
+      service: db
+
+  redis:
+    extends:
+      file: docker-compose.prod.yml
+      service: redis
+
+networks:
+  kolix-public-net:
+    driver: bridge
+  kolix-internal-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:

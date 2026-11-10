@@ -1,0 +1,119 @@
+# ==============================================================================
+# Docker Compose : PRÉ-PRODUCTION / STAGING
+# Commande : docker compose -f docker-compose.preprod.yml up -d --build
+# ==============================================================================
+
+services:
+  # API FastAPI Staging
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: kolix_api_preprod
+    restart: always
+    env_file:
+      - .env.preprod
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - kolix-preprod-net
+
+  # Worker Asynchrone (Tâches lourdes, relances, réconciliations)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: kolix_worker_preprod
+    restart: always
+    command: ["arq", "app.workers.worker.WorkerSettings"]
+    env_file:
+      - .env.preprod
+    depends_on:
+      - db
+      - redis
+    networks:
+      - kolix-preprod-net
+
+  # Base de Données PostgreSQL 17 Staging
+  db:
+    image: postgres:17-alpine
+    container_name: kolix_postgres_preprod
+    restart: always
+    environment:
+      POSTGRES_USER: kolix_preprod_user
+      POSTGRES_PASSWORD: kolix_preprod_strong_password_2026
+      POSTGRES_DB: kolix_preprod_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata_preprod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kolix_preprod_user -d kolix_preprod_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kolix-preprod-net
+
+  # Redis 7 Staging avec Mot de Passe
+  redis:
+    image: redis:7-alpine
+    container_name: kolix_redis_preprod
+    restart: always
+    command: ["redis-server", "--requirepass", "kolix_redis_preprod_secret"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata_preprod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "kolix_redis_preprod_secret", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kolix-preprod-net
+
+  # MinIO Staging S3 (alpine/minio:latest-release)
+  minio:
+    image: alpine/minio:latest-release
+    container_name: kolix_minio_preprod
+    user: root
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: preprod_minio_key
+      MINIO_ROOT_PASSWORD: preprod_minio_ultra_secure_secret
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - miniodata_preprod:/data
+    networks:
+      - kolix-preprod-net
+
+networks:
+  kolix-preprod-net:
+    driver: bridge
+
+volumes:
+  pgdata_preprod:
+  redisdata_preprod:
+  miniodata_preprod:

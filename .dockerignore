@@ -1,0 +1,21 @@
+# .dockerignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.git
+.gitignore
+.dockerignore
+.pytest_cache
+.coverage
+htmlcov/
+.mypy_cache
+.ruff_cache
+*.log
+.DS_Store
+Thumbs.db
+
