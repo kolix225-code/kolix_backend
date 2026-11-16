@@ -1,0 +1,73 @@
+# ==============================================================================
+# RENDER BLUEPRINT INFRASTRUCTURE AS CODE (IaC) - KOLIX BACKEND
+# Doc: https://render.com/docs/blueprint-spec
+# ==============================================================================
+version: "1"
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. ENVIRONNEMENT PRODUCTION (Branche : main)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: kolix-backend-prod
+    runtime: docker
+    repo: https://github.com/kolix225-code/kolix_backend
+    branch: main
+    plan: starter # 'free' ou 'starter' (recommandé pour éviter la mise en veille)
+    region: frankfurt # Francfort (faible latence vers l'Afrique de l'Ouest / Europe)
+    dockerContext: .
+    dockerfilePath: Dockerfile
+    dockerfileTarget: production
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: PORT
+        value: "8000"
+      - key: SECRET_KEY
+        generateValue: true
+      # URL de la base de données Supabase (à renseigner dans le Dashboard Render)
+      - key: DATABASE_URL
+        sync: false
+      - key: BACKEND_CORS_ORIGINS
+        value: "https://kolix.ci,https://kolix-frontend.onrender.com,https://kolix.vercel.app,*"
+      - key: AUTO_SEED
+        value: "false"
+      - key: SKIP_MIGRATIONS
+        value: "false"
+
+  # ----------------------------------------------------------------------------
+  # 2. ENVIRONNEMENT PRÉPRODUCTION / STAGING (Branche : ppd)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: kolix-backend-ppd
+    runtime: docker
+    repo: https://github.com/kolix225-code/kolix_backend
+    branch: ppd
+    plan: free # Plan gratuit pour les tests de préproduction
+    region: frankfurt
+    dockerContext: .
+    dockerfilePath: Dockerfile
+    dockerfileTarget: production
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+      - key: DEBUG
+        value: "true"
+      - key: PORT
+        value: "8000"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: BACKEND_CORS_ORIGINS
+        value: "*"
+      - key: AUTO_SEED
+        value: "true"
+      - key: SKIP_MIGRATIONS
+        value: "false"

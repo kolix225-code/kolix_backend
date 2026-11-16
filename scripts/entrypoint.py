@@ -38,8 +38,20 @@ def run_seed_if_requested():
         subprocess.run([sys.executable, "scripts/seed.py"], check=False)
 
 def main():
-    pg_host = os.getenv("POSTGRES_SERVER", "localhost")
-    pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        from urllib.parse import urlparse
+        clean_url = db_url.replace("postgresql+asyncpg://", "http://").replace("postgresql://", "http://").replace("postgres://", "http://")
+        try:
+            parsed = urlparse(clean_url)
+            pg_host = parsed.hostname or "localhost"
+            pg_port = parsed.port or 5432
+        except Exception:
+            pg_host = os.getenv("POSTGRES_SERVER", "localhost")
+            pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
+    else:
+        pg_host = os.getenv("POSTGRES_SERVER", "localhost")
+        pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
     
     # 1. Attente de PostgreSQL
     if not wait_for_service(pg_host, pg_port, "PostgreSQL"):
@@ -59,12 +71,18 @@ def main():
     # 4. Données initiales
     run_seed_if_requested()
 
-    # 5. Démarrer le processus passé en argument (CMD)
+    # 5. Démarrer le processus passé en argument (CMD) en tenant compte de $PORT (Render / Heroku)
+    port = os.getenv("PORT", "8000")
     cmd = sys.argv[1:]
     if not cmd:
-        cmd = ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        cmd = ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", str(port)]
+    else:
+        if "--port" in cmd:
+            idx = cmd.index("--port")
+            if idx + 1 < len(cmd):
+                cmd[idx + 1] = str(port)
 
-    print(f"[ENTRYPOINT] Démarrage de l'application : {' '.join(cmd)}")
+    print(f"[ENTRYPOINT] Démarrage de l'application sur le port {port} : {' '.join(cmd)}")
     sys.stdout.flush()
     os.execvp(cmd[0], cmd)
 

@@ -5,13 +5,29 @@ from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
 # Engine SQLAlchemy 2.0 Async
-engine = create_async_engine(
-    settings.ASYNC_DATABASE_URI,
-    echo=settings.DEBUG,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-)
+connect_args = {}
+# Supabase PgBouncer (Transaction Pooler) & Cloud SSL compatibility
+if "supabase" in settings.ASYNC_DATABASE_URI or "pooler" in settings.ASYNC_DATABASE_URI:
+    connect_args["statement_cache_size"] = 0
+    connect_args["prepared_statement_cache_size"] = 0
+
+engine_kwargs = {
+    "echo": settings.DEBUG,
+    "pool_pre_ping": True,
+}
+
+if connect_args:
+    engine_kwargs["connect_args"] = connect_args
+
+# Adapter la taille du pool si on passe par un pooler externe (ex: Supabase PgBouncer 6543)
+if "pooler" in settings.ASYNC_DATABASE_URI:
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 5
+else:
+    engine_kwargs["pool_size"] = settings.DATABASE_POOL_SIZE
+    engine_kwargs["max_overflow"] = settings.DATABASE_MAX_OVERFLOW
+
+engine = create_async_engine(settings.ASYNC_DATABASE_URI, **engine_kwargs)
 
 # Async Session Factory
 AsyncSessionLocal = async_sessionmaker(
