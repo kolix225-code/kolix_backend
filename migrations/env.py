@@ -27,8 +27,8 @@ if config.config_file_name is not None:
 # Métadonnées cibles pour la détection autogénérée des modèles
 target_metadata = Base.metadata
 
-# Injecter dynamiquement l'URL de base de données PostgreSQL pour les migrations
-config.set_main_option("sqlalchemy.url", settings.MIGRATION_DATABASE_URI)
+# Injecter dynamiquement l'URL de base de données PostgreSQL pour les migrations (échapper % pour configparser)
+config.set_main_option("sqlalchemy.url", settings.MIGRATION_DATABASE_URI.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

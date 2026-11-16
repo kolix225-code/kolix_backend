@@ -6,8 +6,10 @@ Usage:
 """
 import argparse
 import os
+import re
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -19,6 +21,24 @@ sys.path.insert(0, str(ROOT_DIR))
 def clean_supabase_url(raw_url: str) -> str:
     """Nettoie et formate l'URL Supabase pour asyncpg."""
     url = raw_url.strip()
+
+    # 1. Détecter et supprimer les crochets [password] et encoder les caractères spéciaux comme #
+    match_brackets = re.search(r':\[(.*?)\]@', url)
+    if match_brackets:
+        pwd = match_brackets.group(1)
+        encoded_pwd = urllib.parse.quote_plus(pwd)
+        url = url[:match_brackets.start()] + f":{encoded_pwd}@" + url[match_brackets.end():]
+    elif '@' in url:
+        parts = url.split('@', 1)
+        prefix = parts[0]
+        rest = parts[1]
+        if '://' in prefix and ':' in prefix.split('://', 1)[1]:
+            scheme_part, rest_prefix = prefix.split('://', 1)
+            user, pwd = rest_prefix.split(':', 1)
+            unquoted = urllib.parse.unquote(pwd)
+            encoded_pwd = urllib.parse.quote_plus(unquoted)
+            url = f"{scheme_part}://{user}:{encoded_pwd}@{rest}"
+
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):

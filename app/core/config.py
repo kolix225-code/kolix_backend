@@ -1,3 +1,5 @@
+import re
+import urllib.parse
 from typing import Any, List, Literal, Union
 from pydantic import AnyHttpUrl, EmailStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,6 +64,24 @@ class Settings(BaseSettings):
     def _clean_async_url(raw_url: str) -> str:
         """Adapte et nettoie une URL PostgreSQL pour le driver asynchrone asyncpg."""
         url = raw_url.strip()
+
+        # 1. Détection et suppression automatique des crochets [password] et encodage des caractères spéciaux
+        match_brackets = re.search(r':\[(.*?)\]@', url)
+        if match_brackets:
+            pwd = match_brackets.group(1)
+            encoded_pwd = urllib.parse.quote_plus(pwd)
+            url = url[:match_brackets.start()] + f":{encoded_pwd}@" + url[match_brackets.end():]
+        elif '@' in url:
+            parts = url.split('@', 1)
+            prefix = parts[0]
+            rest = parts[1]
+            if '://' in prefix and ':' in prefix.split('://', 1)[1]:
+                scheme_part, rest_prefix = prefix.split('://', 1)
+                user, pwd = rest_prefix.split(':', 1)
+                unquoted = urllib.parse.unquote(pwd)
+                encoded_pwd = urllib.parse.quote_plus(unquoted)
+                url = f"{scheme_part}://{user}:{encoded_pwd}@{rest}"
+
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
@@ -80,6 +100,23 @@ class Settings(BaseSettings):
     def _clean_sync_url(raw_url: str) -> str:
         """Adapte et nettoie une URL PostgreSQL pour le driver synchrone psycopg2."""
         url = raw_url.strip()
+
+        match_brackets = re.search(r':\[(.*?)\]@', url)
+        if match_brackets:
+            pwd = match_brackets.group(1)
+            encoded_pwd = urllib.parse.quote_plus(pwd)
+            url = url[:match_brackets.start()] + f":{encoded_pwd}@" + url[match_brackets.end():]
+        elif '@' in url:
+            parts = url.split('@', 1)
+            prefix = parts[0]
+            rest = parts[1]
+            if '://' in prefix and ':' in prefix.split('://', 1)[1]:
+                scheme_part, rest_prefix = prefix.split('://', 1)
+                user, pwd = rest_prefix.split(':', 1)
+                unquoted = urllib.parse.unquote(pwd)
+                encoded_pwd = urllib.parse.quote_plus(unquoted)
+                url = f"{scheme_part}://{user}:{encoded_pwd}@{rest}"
+
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+psycopg2://", 1)
         elif url.startswith("postgresql+asyncpg://"):
