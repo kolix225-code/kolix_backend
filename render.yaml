@@ -17,7 +17,6 @@ services:
     region: frankfurt # Francfort (faible latence vers l'Afrique de l'Ouest / Europe)
     dockerContext: .
     dockerfilePath: Dockerfile
-    dockerfileTarget: production
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -54,7 +53,6 @@ services:
     region: frankfurt
     dockerContext: .
     dockerfilePath: Dockerfile
-    dockerfileTarget: production
     healthCheckPath: /health
     autoDeploy: true
     envVars:
