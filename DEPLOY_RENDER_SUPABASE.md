@@ -30,35 +30,32 @@ Le dépôt GitHub `https://github.com/kolix225-code/kolix_backend.git` est déso
 
 ---
 
-### Étape 2.2 : Récupérer la chaîne de connexion (`DATABASE_URL`)
-1. Dans le tableau de bord Supabase, allez dans **Project Settings** (icône d'engrenage en bas à gauche) > **Database**.
-2. Faites défiler jusqu'à la section **Connection parameters** ou **Connection string** :
-   - Sélectionnez l'onglet **URI**.
-   - Vous avez deux modes :
-     - **Session / Direct (Port 5432)** :
-       ```text
-       postgresql://postgres:[VOTRE-MOT-DE-PASSE]@db.[VOTRE-PROJECT-REF].supabase.co:5432/postgres
-       ```
-     - **Transaction Pooler (Port 6543)** *(Recommandé pour Render pour éviter de saturer les connexions)* :
-       ```text
-       postgresql://postgres.[VOTRE-PROJECT-REF]:[VOTRE-MOT-DE-PASSE]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
-       ```
-3. Remplacez `[VOTRE-MOT-DE-PASSE]` par le mot de passe réel que vous avez choisi à l'étape 2.1.
+### Étape 2.2 : Vos chaînes de connexion Supabase
+
+Votre projet Supabase (`huyngghpmcscvvhyhjln`) utilise l'architecture double URL :
+- **`DATABASE_URL` (Pooler Transaction - Port 6543)** pour l'exécution de l'API :
+  ```env
+  DATABASE_URL="postgresql://postgres.huyngghpmcscvvhyhjln:[VOTRE-MOT-DE-PASSE]@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+  ```
+- **`DIRECT_URL` (Pooler Session - Port 5432)** pour les migrations Alembic (DDL) :
+  ```env
+  DIRECT_URL="postgresql://postgres.huyngghpmcscvvhyhjln:[VOTRE-MOT-DE-PASSE]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
+  ```
 
 ---
 
 ### Étape 2.3 : Appliquer les tables et migrations sur Supabase
 
-Vous disposez d'un script clé en main dans le projet pour initialiser la base Supabase depuis votre machine :
+Vous pouvez initialiser toutes les tables et schémas sur Supabase avec la commande suivante :
 
 ```powershell
 cd C:\Website\kolix_backend
 
-# Exécuter les migrations Alembic sur Supabase
-.\.venv\Scripts\python.exe scripts\migrate_supabase.py "postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres"
+# Exécuter les migrations Alembic avec votre DIRECT_URL (Port 5432) :
+.\.venv\Scripts\python.exe scripts\migrate_supabase.py "postgresql://postgres.huyngghpmcscvvhyhjln:[VOTRE-MOT-DE-PASSE]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
 
-# Optionnel : Pour insérer aussi les données initiales de démo/admin :
-.\.venv\Scripts\python.exe scripts\migrate_supabase.py "postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres" --seed
+# Avec insertion des données initiales (administrateur et boutique démo) :
+.\.venv\Scripts\python.exe scripts\migrate_supabase.py "postgresql://postgres.huyngghpmcscvvhyhjln:[VOTRE-MOT-DE-PASSE]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres" --seed
 ```
 
 > [!NOTE]
@@ -158,3 +155,4 @@ npm run build
 npm run dev
 ```
 Le frontend consommera désormais directement l'API déployée sur Render connectée à Supabase !
+

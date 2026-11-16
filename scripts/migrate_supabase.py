@@ -24,6 +24,10 @@ def clean_supabase_url(raw_url: str) -> str:
     elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    url = url.replace("?pgbouncer=true&", "?")
+    url = url.replace("?pgbouncer=true", "")
+    url = url.replace("&pgbouncer=true", "")
+
     if "sslmode=require" in url:
         url = url.replace("sslmode=require", "ssl=require")
 
@@ -32,19 +36,20 @@ def clean_supabase_url(raw_url: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Migration et initialisation Supabase pour Kolix")
-    parser.add_argument("db_url", nargs="?", default=os.getenv("DATABASE_URL"), help="URL de connexion Supabase")
+    parser.add_argument("db_url", nargs="?", default=os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL"), help="URL de connexion Supabase (DIRECT_URL session pooler 5432 recommandé)")
     parser.add_argument("--seed", action="store_true", help="Insérer les données initiales de démo/admin")
     args = parser.parse_args()
 
     raw_url = args.db_url
     if not raw_url:
         print("[ERREUR] Aucune URL Supabase fournie.")
-        print("Usage: python scripts/migrate_supabase.py \"postgresql://postgres:pass@db.ref.supabase.co:5432/postgres\"")
-        print("Ou définissez la variable d'environnement DATABASE_URL.")
+        print("Usage: python scripts/migrate_supabase.py \"postgresql://postgres:pass@aws-1-eu-west-1.pooler.supabase.com:5432/postgres\"")
+        print("Ou définissez DIRECT_URL ou DATABASE_URL.")
         sys.exit(1)
 
     formatted_url = clean_supabase_url(raw_url)
     os.environ["DATABASE_URL"] = formatted_url
+    os.environ["DIRECT_URL"] = formatted_url
 
     print("=" * 70)
     print("  KOLIX BACKEND - MIGRATION & INITIALISATION SUPABASE")
@@ -83,3 +88,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

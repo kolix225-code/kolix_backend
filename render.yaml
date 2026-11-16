@@ -29,8 +29,11 @@ services:
         value: "8000"
       - key: SECRET_KEY
         generateValue: true
-      # URL de la base de données Supabase (à renseigner dans le Dashboard Render)
+      # URL de la base de données Supabase (Pooler transaction 6543 pour l'API)
       - key: DATABASE_URL
+        sync: false
+      # URL Directe Supabase (Session pooler 5432 pour les migrations Alembic)
+      - key: DIRECT_URL
         sync: false
       - key: BACKEND_CORS_ORIGINS
         value: "https://kolix.ci,https://kolix-frontend.onrender.com,https://kolix.vercel.app,*"
@@ -65,9 +68,12 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: BACKEND_CORS_ORIGINS
         value: "*"
       - key: AUTO_SEED
         value: "true"
       - key: SKIP_MIGRATIONS
         value: "false"
+

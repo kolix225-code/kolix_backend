@@ -27,8 +27,8 @@ if config.config_file_name is not None:
 # Métadonnées cibles pour la détection autogénérée des modèles
 target_metadata = Base.metadata
 
-# Injecter dynamiquement l'URL de base de données PostgreSQL
-config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URI)
+# Injecter dynamiquement l'URL de base de données PostgreSQL pour les migrations
+config.set_main_option("sqlalchemy.url", settings.MIGRATION_DATABASE_URI)
 
 
 def run_migrations_offline() -> None:
@@ -59,10 +59,11 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with asyncpg."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.ASYNC_DATABASE_URI
+    migration_url = settings.MIGRATION_DATABASE_URI
+    configuration["sqlalchemy.url"] = migration_url
 
     connect_args = {}
-    if "supabase" in settings.ASYNC_DATABASE_URI or "pooler" in settings.ASYNC_DATABASE_URI:
+    if "supabase" in migration_url or "pooler" in migration_url:
         connect_args["statement_cache_size"] = 0
 
     connectable = async_engine_from_config(
