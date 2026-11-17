@@ -13,7 +13,7 @@ services:
     runtime: docker
     repo: https://github.com/kolix225-code/kolix_backend
     branch: main
-    plan: starter # 'free' ou 'starter' (recommandé pour éviter la mise en veille)
+    plan: free # 100% Gratuit / Freemium (aucune carte bancaire requise)
     region: frankfurt # Francfort (faible latence vers l'Afrique de l'Ouest / Europe)
     dockerContext: .
     dockerfilePath: Dockerfile
