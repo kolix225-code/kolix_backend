@@ -37,7 +37,13 @@ services:
       - key: DIRECT_URL
         sync: false
       - key: BACKEND_CORS_ORIGINS
-        value: "https://kolix.ci,https://kolix-frontend.onrender.com,https://kolix.vercel.app,*"
+        value: "https://kolix.ci,https://kolix-frontend.onrender.com,https://kolix-kohl.vercel.app,https://kolix.vercel.app,*"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        value: "noreply@kolix.ci"
+      - key: BREVO_SENDER_NAME
+        value: "Kolix"
       - key: AUTO_SEED
         value: "false"
       - key: SKIP_MIGRATIONS
@@ -74,6 +80,12 @@ services:
         sync: false
       - key: BACKEND_CORS_ORIGINS
         value: "*"
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        value: "noreply@kolix.ci"
+      - key: BREVO_SENDER_NAME
+        value: "Kolix"
       - key: AUTO_SEED
         value: "true"
       - key: SKIP_MIGRATIONS

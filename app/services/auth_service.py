@@ -2,7 +2,7 @@
 import random
 import uuid
 from typing import Tuple
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, ConflictException, UnauthorizedException
@@ -14,6 +14,7 @@ from app.models.shop import Shop, StoreCustomization
 from app.models.user import User
 from app.models.wallet import Wallet
 from app.schemas.auth import RegisterStep1Request, TokenResponse, VerifyOtpRequest
+from app.services.email_service import EmailService
 
 class AuthService:
     @staticmethod
@@ -50,21 +51,56 @@ class AuthService:
         # Generate 6-digit OTP
         otp_code = str(random.randint(100000, 999999))
         redis = await get_redis()
-        # Save OTP with 5 min TTL
+        # Save OTP with 5 min TTL pour le numéro de téléphone et pour l'email
         await redis.setex(f"otp:{full_phone}", settings.OTP_EXPIRE_MINUTES * 60, otp_code)
+        await redis.setex(f"otp:{data.email.strip().lower()}", settings.OTP_EXPIRE_MINUTES * 60, otp_code)
+
+        # Envoi de l'OTP par email via Brevo
+        await EmailService.send_otp_email(
+            to_email=data.email,
+            to_name=data.name,
+            otp_code=otp_code
+        )
 
         return new_user, otp_code
 
     @staticmethod
     async def verify_otp_and_activate(db: AsyncSession, data: VerifyOtpRequest) -> TokenResponse:
         redis = await get_redis()
-        saved_otp = await redis.get(f"otp:{data.phone}")
+
+        # Recherche de l'OTP soit par email, soit par téléphone, soit par identifier
+        lookup_keys = []
+        if data.identifier:
+            lookup_keys.append(f"otp:{data.identifier.strip().lower()}")
+            lookup_keys.append(f"otp:{data.identifier.strip()}")
+        if data.email:
+            lookup_keys.append(f"otp:{data.email.strip().lower()}")
+        if data.phone:
+            lookup_keys.append(f"otp:{data.phone.strip()}")
+
+        saved_otp = None
+        for key in lookup_keys:
+            saved_otp = await redis.get(key)
+            if saved_otp:
+                break
 
         # In development, accept 123456 as universal test code if needed
         if not saved_otp or (saved_otp != data.otp_code and data.otp_code != "123456"):
             raise BadRequestException("Code OTP invalide ou expiré.")
 
-        stmt = select(User).where(User.phone_number == data.phone)
+        conditions = []
+        if data.identifier:
+            conditions.append(User.email == data.identifier.strip().lower())
+            conditions.append(User.phone_number == data.identifier.strip())
+        if data.email:
+            conditions.append(User.email == data.email.strip().lower())
+        if data.phone:
+            conditions.append(User.phone_number == data.phone.strip())
+
+        if not conditions:
+            raise BadRequestException("Veuillez fournir une adresse email ou un numéro de téléphone.")
+
+        stmt = select(User).where(or_(*conditions))
         res = await db.execute(stmt)
         user = res.scalar_one_or_none()
         if not user:
@@ -131,7 +167,10 @@ class AuthService:
         await db.refresh(user)
 
         # Clear OTP
-        await redis.delete(f"otp:{data.phone}")
+        if user.phone_number:
+            await redis.delete(f"otp:{user.phone_number}")
+        if user.email:
+            await redis.delete(f"otp:{user.email.strip().lower()}")
 
         # Generate tokens
         access_token = create_access_token(

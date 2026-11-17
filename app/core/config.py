@@ -183,6 +183,11 @@ class Settings(BaseSettings):
     WHATSAPP_ACCESS_TOKEN: str = ""
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: str = "kolix_wa_webhook_verify_secret"
 
+    # Email Transactionnel & OTP (Brevo / Sendinblue)
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = "noreply@kolix.ci"
+    BREVO_SENDER_NAME: str = "Kolix"
+
     # Passerelles de Paiement
     WAVE_API_KEY: str = ""
     WAVE_WEBHOOK_SECRET: str = ""

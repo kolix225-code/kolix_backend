@@ -22,14 +22,15 @@ async def register_step1(
     data: RegisterStep1Request,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Étape 1 : Création du compte et envoi du code OTP WhatsApp."""
+    """Étape 1 : Création du compte et envoi du code OTP par Email (Brevo)."""
     user, otp = await AuthService.register_step1(db, data)
     return StandardResponse(
-        message="Code OTP envoyé avec succès sur votre numéro WhatsApp.",
+        message="Code OTP envoyé avec succès sur votre adresse email.",
         data=RegisterStep1Response(
             user_id=user.id,
+            email=user.email,
             phone=user.phone_number,
-            message="Un code de confirmation vous a été envoyé sur WhatsApp.",
+            message=f"Un code de confirmation a été envoyé à {user.email}.",
             otp_debug=otp
         )
     )

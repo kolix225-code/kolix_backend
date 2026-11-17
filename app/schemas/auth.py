@@ -17,12 +17,15 @@ class RegisterStep1Request(BaseSchema):
 
 class RegisterStep1Response(BaseSchema):
     user_id: uuid.UUID
+    email: Optional[str] = None
     phone: str
     message: str
     otp_debug: Optional[str] = None # Affiché en dev
 
 class VerifyOtpRequest(BaseSchema):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    identifier: Optional[str] = None # Accepte soit l'email soit le téléphone
     otp_code: str = Field(..., min_length=6, max_length=6)
 
 class LoginRequest(BaseSchema):
