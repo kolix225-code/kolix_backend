@@ -94,5 +94,5 @@ USER kolix
 EXPOSE 8000
 
 ENTRYPOINT ["/app/.venv/bin/python", "/app/scripts/entrypoint.py"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--lifespan", "on"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--lifespan", "on"]
 

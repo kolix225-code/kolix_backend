@@ -62,6 +62,17 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # Routes Globales
+@app.get("/", tags=["Racine"])
+async def root():
+    return {
+        "status": "online",
+        "app": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health", tags=["Santé"])
 async def health_check():
     return {
