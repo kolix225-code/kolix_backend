@@ -7,7 +7,7 @@ from app.schemas.common import BaseSchema
 class CollaboratorCreate(BaseSchema):
     name: str
     phone: str
-    email: EmailStr
+    email: str
     role: str = "Gestionnaire de commandes"
     permissions: List[str] = ["Accueil", "Commandes", "Stock", "Client"]
     password: Optional[str] = None # Mot de passe défini par le propriétaire
@@ -15,6 +15,7 @@ class CollaboratorCreate(BaseSchema):
 class CollaboratorUpdate(BaseSchema):
     name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None # Actif, Suspendu
     permissions: Optional[List[str]] = None

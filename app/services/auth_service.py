@@ -194,24 +194,59 @@ class AuthService:
 
     @staticmethod
     async def login(db: AsyncSession, identifier: str, password: str) -> TokenResponse:
-        clean_email = identifier.strip().lower()
-        clean_phone = identifier.strip().replace(" ", "").replace("-", "")
-        if clean_phone.startswith("+225"):
-            clean_phone_alt = clean_phone[4:]
-        else:
-            clean_phone_alt = f"+225{clean_phone}"
+        import re
+        from sqlalchemy import or_
+
+        raw = identifier.strip()
+        clean_email = raw.lower()
+        digits = re.sub(r"[^\d]", "", raw)
+
+        phone_patterns = set()
+        if digits:
+            phone_patterns.add(digits)
+            if digits.startswith("225"):
+                local = digits[3:]
+                phone_patterns.add(local)
+                phone_patterns.add(f"+{digits}")
+                if local.startswith("0"):
+                    phone_patterns.add(local[1:])
+                    phone_patterns.add(f"+225{local[1:]}")
+                    phone_patterns.add(f"225{local[1:]}")
+                else:
+                    phone_patterns.add(f"0{local}")
+                    phone_patterns.add(f"+2250{local}")
+                    phone_patterns.add(f"2250{local}")
+            else:
+                phone_patterns.add(f"+225{digits}")
+                phone_patterns.add(f"225{digits}")
+                if digits.startswith("0"):
+                    local = digits[1:]
+                    phone_patterns.add(local)
+                    phone_patterns.add(f"+225{local}")
+                    phone_patterns.add(f"225{local}")
+                else:
+                    phone_patterns.add(f"0{digits}")
+                    phone_patterns.add(f"+2250{digits}")
+                    phone_patterns.add(f"2250{digits}")
+
+        conds = [User.email.ilike(clean_email)]
+        for p in phone_patterns:
+            conds.append(User.phone_number == p)
 
         # Search by email or phone
-        stmt = select(User).where(
-            (User.email == clean_email) |
-            (User.phone_number == clean_phone) |
-            (User.phone_number == clean_phone_alt)
-        )
+        stmt = select(User).where(or_(*conds))
         res = await db.execute(stmt)
         user = res.scalar_one_or_none()
 
         if not user or not verify_password(password, user.password_hash):
             raise UnauthorizedException("Identifiant ou mot de passe incorrect.")
+
+        if not user.is_active:
+            raise UnauthorizedException("Votre compte est désactivé ou suspendu.")
+
+        if not user.is_verified:
+            user.is_verified = True
+            await db.commit()
 
         permissions = ["*"]
         role = user.role
@@ -224,12 +259,18 @@ class AuthService:
             permissions = ["*"]
         else:
             from app.models.user import Collaborator
+            c_conds = [Collaborator.email.ilike(user.email)]
+            for p in phone_patterns:
+                c_conds.append(Collaborator.phone == p)
+            if user.phone_number:
+                c_conds.append(Collaborator.phone == user.phone_number)
+
             stmt_collab = select(Collaborator).where(
-                (Collaborator.email == user.email) | (Collaborator.phone == user.phone_number),
+                or_(*c_conds),
                 Collaborator.is_deleted == False
-            )
+            ).order_by(Collaborator.created_at.desc())
             collab_res = await db.execute(stmt_collab)
-            collab = collab_res.scalar_one_or_none()
+            collab = collab_res.scalars().first()
             if collab:
                 role = collab.role
                 permissions = collab.permissions if collab.permissions else ["Accueil"]
