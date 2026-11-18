@@ -77,6 +77,17 @@ class OrderService:
         )
         db.add(item)
 
+        # Décrémenter le stock du produit si trouvé
+        stmt_p = select(Product).where(
+            Product.shop_id == shop.id,
+            Product.name.ilike(f"%{product_name[:15]}%"),
+            Product.is_deleted == False
+        )
+        p_res = await db.execute(stmt_p)
+        matched_prod = p_res.scalars().first()
+        if matched_prod and matched_prod.stock_quantity >= quantity:
+            matched_prod.stock_quantity = max(0, matched_prod.stock_quantity - quantity)
+
         # Update Shop total orders
         shop.orders_count += 1
 

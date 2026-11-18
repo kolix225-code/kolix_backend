@@ -33,6 +33,19 @@ class PublicCheckoutRequest(BaseSchema):
     payment_mode: str = "COD_CASH" # COD_CASH, COD_MOMO, cash_on_delivery
     note: Optional[str] = None
 
+class OrderCreateRequest(BaseSchema):
+    client_name: str
+    client_phone: str
+    city: str
+    delivery_place: str
+    product_name: str
+    amount: float
+    quantity: int = 1
+    payment_mode: str = "COD_CASH"
+    note: Optional[str] = None
+    offer_label: Optional[str] = None
+    status: str = "En cours"
+
 class OrderUpdateStatusRequest(BaseSchema):
     status: str # En cours, Livrée, Reportée, Annulée, Contestée, Injoignable
 

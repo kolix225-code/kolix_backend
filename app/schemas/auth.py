@@ -40,6 +40,7 @@ class TokenResponse(BaseSchema):
     email: str
     name: str
     role: str
+    permissions: list[str] = ["*"]
     shop_id: Optional[uuid.UUID] = None
     shop_domain: Optional[str] = None
 

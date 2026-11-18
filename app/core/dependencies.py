@@ -43,18 +43,50 @@ async def get_current_user(
 
 
 async def get_current_shop(
+    token: Annotated[Optional[str], Depends(oauth2_scheme)],
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ) -> Shop:
+    # 1. Vérifier si un shop_id valide est encodé dans le token JWT
+    if token:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            shop_id_str = payload.get("shop_id")
+            if shop_id_str:
+                stmt_t = select(Shop).where(Shop.id == uuid.UUID(shop_id_str), Shop.is_deleted == False)
+                res_t = await db.execute(stmt_t)
+                shop = res_t.scalar_one_or_none()
+                if shop:
+                    return shop
+        except Exception:
+            pass
+
+    # 2. Si le compte connecté est le propriétaire d'une boutique
     stmt = select(Shop).where(Shop.owner_id == current_user.id, Shop.is_deleted == False).order_by(Shop.created_at.desc())
     result = await db.execute(stmt)
     shop = result.scalar_one_or_none()
-    if not shop:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune boutique active trouvée pour ce compte."
-        )
-    return shop
+    if shop:
+        return shop
+
+    # 3. Si le compte connecté est un collaborateur
+    from app.models.user import Collaborator
+    stmt_collab = select(Collaborator).where(
+        (Collaborator.email == current_user.email) | (Collaborator.phone == current_user.phone_number),
+        Collaborator.is_deleted == False
+    )
+    res_collab = await db.execute(stmt_collab)
+    collab = res_collab.scalar_one_or_none()
+    if collab:
+        stmt_shop = select(Shop).where(Shop.id == collab.shop_id, Shop.is_deleted == False)
+        res_shop = await db.execute(stmt_shop)
+        shop = res_shop.scalar_one_or_none()
+        if shop:
+            return shop
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Aucune boutique active trouvée pour ce compte."
+    )
 
 
 class PermissionChecker:

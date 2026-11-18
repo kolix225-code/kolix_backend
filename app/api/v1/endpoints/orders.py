@@ -1,8 +1,10 @@
 # app/api/v1/endpoints/orders.py
 import csv
 import io
+import random
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import or_, select
@@ -11,13 +13,16 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.dependencies import PermissionChecker, get_current_shop
 from app.core.exceptions import NotFoundException
+from app.models.client import Client
 from app.models.inventory import InventoryItem
-from app.models.order import Order
+from app.models.order import Order, OrderItem
+from app.models.product import Product
 from app.models.shop import Shop
 from app.models.wallet import Wallet, WalletTransaction
 from app.schemas.common import StandardResponse
 from app.schemas.order import (
     OrderAssignDeliveryRequest,
+    OrderCreateRequest,
     OrderItemSchema,
     OrderResponse,
     OrderUpdateStatusRequest,
@@ -90,6 +95,116 @@ async def list_orders(
         response_items.append(resp)
 
     return StandardResponse(data=response_items)
+
+@router.post("", response_model=StandardResponse[OrderResponse], dependencies=[Depends(PermissionChecker("Commandes"))])
+async def create_order(
+    data: OrderCreateRequest,
+    shop: Annotated[Shop, Depends(get_current_shop)],
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """Créer manuellement une nouvelle commande depuis le tableau de bord marchand."""
+    order_id = f"KX-{random.randint(1000, 9999)}"
+    while (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none():
+        order_id = f"KX-{random.randint(1000, 9999)}"
+
+    new_order = Order(
+        id=order_id,
+        shop_id=shop.id,
+        client_name=data.client_name.strip(),
+        client_phone=data.client_phone.strip(),
+        city=data.city.strip(),
+        delivery_place=data.delivery_place.strip(),
+        total_amount=data.amount,
+        status=data.status or "En cours",
+        payment_mode=data.payment_mode or "COD_CASH",
+        note=data.note,
+        offer_label=data.offer_label or data.product_name,
+        quantity=data.quantity or 1,
+        qr_payload=f"KOLIX-PAY:{order_id}:{int(data.amount)}:XOF:{data.client_name.strip().upper().replace(' ', '-')}"
+    )
+    db.add(new_order)
+
+    # Order Item
+    item = OrderItem(
+        order_id=order_id,
+        product_name=data.product_name,
+        variant_label=data.offer_label or data.product_name,
+        quantity=data.quantity or 1,
+        unit_price=data.amount
+    )
+    db.add(item)
+
+    # Décrémenter le stock produit si trouvé
+    stmt_prod = select(Product).where(
+        Product.shop_id == shop.id,
+        Product.name.ilike(f"%{data.product_name[:15]}%"),
+        Product.is_deleted == False
+    )
+    p_res = await db.execute(stmt_prod)
+    matched_prod = p_res.scalars().first()
+    if matched_prod and matched_prod.stock_quantity >= data.quantity:
+        matched_prod.stock_quantity = max(0, matched_prod.stock_quantity - data.quantity)
+
+    # Mettre à jour / Créer le client dans le CRM
+    stmt_client = select(Client).where(Client.shop_id == shop.id, Client.phone == data.client_phone.strip())
+    cl_res = await db.execute(stmt_client)
+    client = cl_res.scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+    decimal_amount = Decimal(str(data.amount))
+    if client:
+        client.total_orders += 1
+        client.total_spent = Decimal(str(client.total_spent)) + decimal_amount
+        client.last_order_date = now
+        client.city = data.city.strip()
+        client.place = data.delivery_place.strip()
+    else:
+        client = Client(
+            shop_id=shop.id,
+            name=data.client_name.strip(),
+            phone=data.client_phone.strip(),
+            city=data.city.strip(),
+            place=data.delivery_place.strip(),
+            total_orders=1,
+            total_spent=decimal_amount,
+            delivery_success_rate=100.0,
+            last_order_date=now
+        )
+        db.add(client)
+
+    shop.orders_count += 1
+    await db.commit()
+    await db.refresh(new_order)
+
+    return StandardResponse(
+        message=f"Commande {new_order.id} enregistrée avec succès.",
+        data=OrderResponse(
+            id=new_order.id,
+            shop_id=new_order.shop_id,
+            client_name=new_order.client_name,
+            client_phone=new_order.client_phone,
+            city=new_order.city,
+            delivery_place=new_order.delivery_place,
+            total_amount=float(new_order.total_amount),
+            status=new_order.status,
+            payment_mode=new_order.payment_mode,
+            paid_at=new_order.paid_at,
+            note=new_order.note,
+            offer_label=new_order.offer_label,
+            quantity=new_order.quantity,
+            qr_payload=new_order.qr_payload,
+            created_at=new_order.created_at,
+            items=[
+                OrderItemSchema(
+                    product_id=None,
+                    product_name=item.product_name,
+                    variant_label=item.variant_label,
+                    quantity=item.quantity,
+                    unit_price=float(item.unit_price)
+                )
+            ]
+        )
+    )
 
 @router.get("/{id}", response_model=StandardResponse[OrderResponse], dependencies=[Depends(PermissionChecker("Commandes"))])
 async def get_order(

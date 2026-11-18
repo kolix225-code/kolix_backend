@@ -204,14 +204,38 @@ class AuthService:
         if not user or not verify_password(password, user.password_hash):
             raise UnauthorizedException("Identifiant ou mot de passe incorrect.")
 
-        stmt_shop = select(Shop).where(Shop.owner_id == user.id, Shop.is_deleted == False).order_by(Shop.created_at.desc())
-        shop_res = await db.execute(stmt_shop)
-        shop = shop_res.scalar_one_or_none()
+        permissions = ["*"]
+        role = user.role
+        shop = None
+
+        if user.role == "Propriétaire":
+            stmt_shop = select(Shop).where(Shop.owner_id == user.id, Shop.is_deleted == False).order_by(Shop.created_at.desc())
+            shop_res = await db.execute(stmt_shop)
+            shop = shop_res.scalar_one_or_none()
+            permissions = ["*"]
+        else:
+            from app.models.user import Collaborator
+            stmt_collab = select(Collaborator).where(
+                (Collaborator.email == user.email) | (Collaborator.phone == user.phone_number),
+                Collaborator.is_deleted == False
+            )
+            collab_res = await db.execute(stmt_collab)
+            collab = collab_res.scalar_one_or_none()
+            if collab:
+                role = collab.role
+                permissions = collab.permissions if collab.permissions else ["Accueil"]
+                stmt_shop = select(Shop).where(Shop.id == collab.shop_id, Shop.is_deleted == False)
+                shop_res = await db.execute(stmt_shop)
+                shop = shop_res.scalar_one_or_none()
+            else:
+                stmt_shop = select(Shop).where(Shop.owner_id == user.id, Shop.is_deleted == False).order_by(Shop.created_at.desc())
+                shop_res = await db.execute(stmt_shop)
+                shop = shop_res.scalar_one_or_none()
 
         access_token = create_access_token(
             subject=user.id,
-            role=user.role,
-            permissions=["*"],
+            role=role,
+            permissions=permissions,
             shop_id=str(shop.id) if shop else None
         )
         refresh_token = create_refresh_token(subject=user.id)
@@ -222,7 +246,8 @@ class AuthService:
             user_id=user.id,
             email=user.email,
             name=user.full_name,
-            role=user.role,
+            role=role,
+            permissions=permissions,
             shop_id=shop.id if shop else None,
             shop_domain=shop.domain if shop else None
         )

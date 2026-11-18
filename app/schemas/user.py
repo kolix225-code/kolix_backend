@@ -10,6 +10,7 @@ class CollaboratorCreate(BaseSchema):
     email: EmailStr
     role: str = "Gestionnaire de commandes"
     permissions: List[str] = ["Accueil", "Commandes", "Stock", "Client"]
+    password: Optional[str] = None # Mot de passe défini par le propriétaire
 
 class CollaboratorUpdate(BaseSchema):
     name: Optional[str] = None
@@ -17,6 +18,7 @@ class CollaboratorUpdate(BaseSchema):
     role: Optional[str] = None
     status: Optional[str] = None # Actif, Suspendu
     permissions: Optional[List[str]] = None
+    password: Optional[str] = None
 
 class CollaboratorResponse(BaseSchema):
     id: uuid.UUID
