@@ -17,22 +17,46 @@ from app.schemas.order import PublicCheckoutRequest
 class OrderService:
     @staticmethod
     async def create_public_cod_order(db: AsyncSession, data: PublicCheckoutRequest) -> Order:
-        # Find shop by slug or domain
-        stmt_shop = select(Shop).where(
-            (Shop.slug == data.shop_domain_or_slug) |
-            (Shop.domain == data.shop_domain_or_slug) |
-            (Shop.custom_domain == data.shop_domain_or_slug)
-        )
-        shop_res = await db.execute(stmt_shop)
-        shop = shop_res.scalar_one_or_none()
+        from sqlalchemy import or_
 
+        shop = None
+        # 1. Par shop_id direct si fourni
+        if data.shop_id:
+            s_res = await db.execute(select(Shop).where(Shop.id == data.shop_id, Shop.is_deleted == False))
+            shop = s_res.scalar_one_or_none()
+
+        # 2. Par slug ou domaine de la boutique
+        if not shop and data.shop_domain_or_slug:
+            stmt_shop = select(Shop).where(
+                (Shop.slug == data.shop_domain_or_slug) |
+                (Shop.domain == data.shop_domain_or_slug) |
+                (Shop.custom_domain == data.shop_domain_or_slug),
+                Shop.is_deleted == False
+            )
+            shop_res = await db.execute(stmt_shop)
+            shop = shop_res.scalar_one_or_none()
+
+        # 3. Par correspondance du produit (produit_id ou nom)
+        if not shop and (data.product_id or data.product_name):
+            p_cond = []
+            if data.product_id:
+                p_cond.append(Product.id == data.product_id)
+            if data.product_name:
+                p_clean = data.product_name.split('(')[0].strip()
+                p_cond.append(Product.name.ilike(f"%{p_clean[:12]}%"))
+            p_res = await db.execute(select(Product).where(or_(*p_cond), Product.is_deleted == False))
+            matched_prod_shop = p_res.scalars().first()
+            if matched_prod_shop:
+                s_res = await db.execute(select(Shop).where(Shop.id == matched_prod_shop.shop_id, Shop.is_deleted == False))
+                shop = s_res.scalar_one_or_none()
+
+        # 4. Repli sur la boutique la plus récente
         if not shop:
-            # Fallback to first active shop in development
-            stmt_fallback = select(Shop).limit(1)
+            stmt_fallback = select(Shop).where(Shop.is_deleted == False).order_by(Shop.created_at.desc()).limit(1)
             fb_res = await db.execute(stmt_fallback)
             shop = fb_res.scalar_one_or_none()
             if not shop:
-                raise NotFoundException("Boutique", data.shop_domain_or_slug)
+                raise NotFoundException("Boutique", data.shop_domain_or_slug or "principale")
 
         client_name = data.client_name or (data.customer.name if data.customer else "Client")
         client_phone = data.client_phone or (data.customer.phone if data.customer else "")
@@ -78,15 +102,25 @@ class OrderService:
         db.add(item)
 
         # Décrémenter le stock du produit si trouvé
+        p_clean = product_name.split('(')[0].strip()
         stmt_p = select(Product).where(
             Product.shop_id == shop.id,
-            Product.name.ilike(f"%{product_name[:15]}%"),
+            Product.name.ilike(f"%{p_clean[:12]}%"),
             Product.is_deleted == False
         )
         p_res = await db.execute(stmt_p)
         matched_prod = p_res.scalars().first()
         if matched_prod and matched_prod.stock_quantity >= quantity:
             matched_prod.stock_quantity = max(0, matched_prod.stock_quantity - quantity)
+            stmt_inv = select(InventoryItem).where(
+                InventoryItem.product_id == matched_prod.id,
+                InventoryItem.shop_id == shop.id
+            )
+            inv_res = await db.execute(stmt_inv)
+            inv_item = inv_res.scalar_one_or_none()
+            if inv_item:
+                inv_item.qty_remaining = matched_prod.stock_quantity
+                inv_item.qty_sold += quantity
 
         # Update Shop total orders
         shop.orders_count += 1

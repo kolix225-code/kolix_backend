@@ -18,7 +18,9 @@ class CustomerInfo(BaseSchema):
     address: str
 
 class PublicCheckoutRequest(BaseSchema):
+    shop_id: Optional[uuid.UUID] = None
     shop_domain_or_slug: Optional[str] = None
+    product_id: Optional[uuid.UUID] = None
     client_name: Optional[str] = None
     client_phone: Optional[str] = None
     city: Optional[str] = None
@@ -34,6 +36,7 @@ class PublicCheckoutRequest(BaseSchema):
     note: Optional[str] = None
 
 class OrderCreateRequest(BaseSchema):
+    shop_id: Optional[uuid.UUID] = None
     client_name: str
     client_phone: str
     city: str

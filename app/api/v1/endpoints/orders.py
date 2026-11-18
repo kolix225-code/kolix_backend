@@ -135,15 +135,25 @@ async def create_order(
     db.add(item)
 
     # Décrémenter le stock produit si trouvé
+    p_clean = data.product_name.split('(')[0].strip()
     stmt_prod = select(Product).where(
         Product.shop_id == shop.id,
-        Product.name.ilike(f"%{data.product_name[:15]}%"),
+        Product.name.ilike(f"%{p_clean[:12]}%"),
         Product.is_deleted == False
     )
     p_res = await db.execute(stmt_prod)
     matched_prod = p_res.scalars().first()
     if matched_prod and matched_prod.stock_quantity >= data.quantity:
         matched_prod.stock_quantity = max(0, matched_prod.stock_quantity - data.quantity)
+        stmt_inv = select(InventoryItem).where(
+            InventoryItem.product_id == matched_prod.id,
+            InventoryItem.shop_id == shop.id
+        )
+        inv_res = await db.execute(stmt_inv)
+        inv_item = inv_res.scalar_one_or_none()
+        if inv_item:
+            inv_item.qty_remaining = matched_prod.stock_quantity
+            inv_item.qty_sold += data.quantity
 
     # Mettre à jour / Créer le client dans le CRM
     stmt_client = select(Client).where(Client.shop_id == shop.id, Client.phone == data.client_phone.strip())

@@ -194,9 +194,18 @@ class AuthService:
 
     @staticmethod
     async def login(db: AsyncSession, identifier: str, password: str) -> TokenResponse:
+        clean_email = identifier.strip().lower()
+        clean_phone = identifier.strip().replace(" ", "").replace("-", "")
+        if clean_phone.startswith("+225"):
+            clean_phone_alt = clean_phone[4:]
+        else:
+            clean_phone_alt = f"+225{clean_phone}"
+
         # Search by email or phone
         stmt = select(User).where(
-            (User.email == identifier) | (User.phone_number == identifier)
+            (User.email == clean_email) |
+            (User.phone_number == clean_phone) |
+            (User.phone_number == clean_phone_alt)
         )
         res = await db.execute(stmt)
         user = res.scalar_one_or_none()

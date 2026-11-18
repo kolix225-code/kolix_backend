@@ -112,14 +112,19 @@ async def checkout_cod_order(
     return StandardResponse(
         message="Votre commande a bien été enregistrée ! Paiement prévu à la livraison.",
         data={
+            "id": order.id,
             "order_id": order.id,
+            "shop_id": str(order.shop_id),
             "client_name": order.client_name,
+            "client_phone": order.client_phone,
             "total_amount": float(order.total_amount),
             "payment_mode": order.payment_mode,
             "city": order.city,
             "delivery_place": order.delivery_place,
             "status": order.status,
-            "qr_payload": order.qr_payload
+            "product_name": data.product_name or (order.items[0].product_name if order.items else "Produit"),
+            "qr_payload": order.qr_payload,
+            "created_at": order.created_at.isoformat() if order.created_at else None
         }
     )
 
