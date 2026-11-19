@@ -285,10 +285,11 @@ async def update_order_status(
         w_res = await db.execute(stmt_w)
         wallet = w_res.scalar_one_or_none()
         if wallet:
+            order_amt = Decimal(str(order.total_amount)) if order.total_amount is not None else Decimal("0")
             if order.payment_mode == "COD_CASH":
-                wallet.cash_balance += float(order.total_amount)
+                wallet.cash_balance += order_amt
             else:
-                wallet.digital_balance += float(order.total_amount)
+                wallet.digital_balance += order_amt
 
             trx = WalletTransaction(
                 wallet_id=wallet.id,
