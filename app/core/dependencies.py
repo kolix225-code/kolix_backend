@@ -103,9 +103,12 @@ class PermissionChecker:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user_perms: List[str] = payload.get("perms", [])
             # Les propriétaires possèdent le joker '*'
-            if "*" in user_perms or self.required_module in user_perms:
+            if "*" in user_perms:
                 return True
+            req_normalized = self.required_module.lower().rstrip("s")
+            for p in user_perms:
+                if p == "*" or p.lower().rstrip("s") == req_normalized:
+                    return True
             raise ForbiddenException(f"Accès refusé au module '{self.required_module}'.")
         except JWTError:
             raise UnauthorizedException("Jeton invalide.")
-

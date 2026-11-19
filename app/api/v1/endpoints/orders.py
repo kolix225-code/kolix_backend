@@ -92,6 +92,13 @@ async def list_orders(
                 ) for it in o.items
             ]
         )
+        if not getattr(resp, "product_name", None):
+            p_name = None
+            if o.items and len(o.items) > 0 and o.items[0].product_name:
+                p_name = o.items[0].product_name
+            elif o.offer_label:
+                p_name = o.offer_label
+            resp.product_name = p_name or "Produit Kolix"
         response_items.append(resp)
 
     return StandardResponse(data=response_items)

@@ -27,22 +27,65 @@ async def list_inventory(
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """État du stock avec statut optimal, faible ou rupture."""
+    # 1. Vérifier les produits actifs de la boutique
+    stmt_p = select(Product).where(Product.shop_id == shop.id, Product.is_deleted == False)
+    res_p = await db.execute(stmt_p)
+    products = res_p.scalars().all()
+
+    # 2. Récupérer les lignes d'inventaire existantes
     stmt = (
         select(InventoryItem)
         .options(selectinload(InventoryItem.product))
         .where(InventoryItem.shop_id == shop.id, InventoryItem.is_deleted == False)
     )
     res = await db.execute(stmt)
-    items = res.scalars().all()
+    items = list(res.scalars().all())
+
+    existing_prod_ids = {it.product_id for it in items if it.product_id}
+    has_new = False
+    for p in products:
+        if p.id not in existing_prod_ids:
+            sku = f"PRD-{str(p.id)[:4].upper()}"
+            rem = p.stock_quantity if p.stock_quantity is not None else 0
+            stat = "Rupture" if rem <= 0 else ("Faible" if rem <= 5 else "Optimal")
+            new_item = InventoryItem(
+                shop_id=shop.id,
+                product_id=p.id,
+                num=sku,
+                qty_initial=rem,
+                qty_sold=0,
+                qty_remaining=rem,
+                threshold=5,
+                unit_cost=float(p.price) * 0.45,
+                status=stat
+            )
+            db.add(new_item)
+            items.append(new_item)
+            has_new = True
+
+    if has_new:
+        await db.commit()
+        # Recharger les items avec la relation product
+        stmt_reload = (
+            select(InventoryItem)
+            .options(selectinload(InventoryItem.product))
+            .where(InventoryItem.shop_id == shop.id, InventoryItem.is_deleted == False)
+        )
+        res_r = await db.execute(stmt_reload)
+        items = list(res_r.scalars().all())
 
     resp = []
     for it in items:
+        # Ne renvoyer que les articles dont le produit n'est pas supprimé
+        if it.product and it.product.is_deleted:
+            continue
+        p_name = it.product.name if it.product else "Produit"
         resp.append(
             InventoryItemResponse(
                 id=it.id,
                 shop_id=it.shop_id,
                 product_id=it.product_id,
-                product_name=it.product.name if it.product else "Produit",
+                product_name=p_name,
                 num=it.num,
                 qty_initial=it.qty_initial,
                 qty_sold=it.qty_sold,
