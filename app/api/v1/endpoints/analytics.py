@@ -22,8 +22,13 @@ async def get_dashboard_analytics(
     period: str = Query("mois")
 ):
     """Statistiques consolidées (Chiffre d'affaires, visites, commandes, ventes effectives, taux de conversion, graphiques, statuts, zones, top produits, calendrier)."""
-    # 1. Requête des commandes réelles de la boutique
-    stmt_orders = select(Order).where(Order.shop_id == shop.id, Order.is_deleted == False).order_by(Order.created_at.desc())
+    # 1. Requête des commandes réelles de la boutique avec leurs articles
+    stmt_orders = (
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.shop_id == shop.id, Order.is_deleted == False)
+        .order_by(Order.created_at.desc())
+    )
     res = await db.execute(stmt_orders)
     orders = res.scalars().all()
 
