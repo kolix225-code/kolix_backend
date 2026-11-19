@@ -123,7 +123,7 @@ async def get_accounting_dashboard(
             cash_percentage=float(cash_pct),
             charges_by_category=cat_dict,
             monthly_history=monthly_history,
-            recent_transactions=all_tx
+            recent_transactions=tx_list
         )
     )
 
