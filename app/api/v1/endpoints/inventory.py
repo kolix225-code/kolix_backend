@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import PermissionChecker, get_current_shop
 from app.core.exceptions import NotFoundException
 from app.models.inventory import InventoryItem, StockMovement
+from app.models.order import Order
 from app.models.product import Product
 from app.models.shop import Shop
 from app.schemas.common import StandardResponse
@@ -111,12 +112,27 @@ async def get_stock_kpis(
     under_thresh = sum(1 for it in items if it.qty_remaining <= it.threshold and it.qty_remaining > 0)
     out_of_stock = sum(1 for it in items if it.qty_remaining <= 0)
 
+    # Calcul dynamique du taux de rotation en jours
+    total_qty_stock = sum(it.qty_remaining for it in items)
+    stmt_orders = select(Order).where(Order.shop_id == shop.id, Order.is_deleted == False)
+    res_orders = await db.execute(stmt_orders)
+    orders = res_orders.scalars().all()
+    delivered_orders = [o for o in orders if o.status == "Livrée"]
+    delivered_units = sum((o.quantity or 1) for o in delivered_orders)
+
+    daily_sales = delivered_units / 30.0 if delivered_units > 0 else (len(orders) / 30.0 if len(orders) > 0 else 0)
+    if daily_sales > 0:
+        rotation_days = round(total_qty_stock / daily_sales, 1)
+        turnover_str = f"{rotation_days}j"
+    else:
+        turnover_str = "0j" if total_qty_stock == 0 else f"{round(total_qty_stock / 1.5, 1)}j"
+
     return StandardResponse(
         data=StockKpisResponse(
             total_value=total_val,
             under_threshold_count=under_thresh,
             pending_restock_count=under_thresh + out_of_stock,
-            turnover_rate="18.4j",
+            turnover_rate=turnover_str,
             out_of_stock_count=out_of_stock
         )
     )

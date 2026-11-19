@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import PermissionChecker, get_current_shop, get_current_user
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.core.security import hash_password
 from app.models.shop import Shop
 from app.models.user import Collaborator, User
@@ -24,11 +24,37 @@ async def list_collaborators(
     shop: Annotated[Shop, Depends(get_current_shop)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-    """Liste tous les membres d'équipe de la boutique courante."""
-    stmt = select(Collaborator).where(Collaborator.shop_id == shop.id, Collaborator.is_deleted == False)
+    """Liste tous les membres d'équipe de la boutique courante (Propriétaire + Collaborateurs)."""
+    # 1. Obtenir le propriétaire du compte
+    stmt_owner = select(User).where(User.id == shop.user_id)
+    res_owner = await db.execute(stmt_owner)
+    owner = res_owner.scalar_one_or_none()
+
+    # 2. Obtenir les collaborateurs de la boutique
+    stmt = select(Collaborator).where(Collaborator.shop_id == shop.id, Collaborator.is_deleted == False).order_by(Collaborator.created_at.asc())
     res = await db.execute(stmt)
     collaborators = res.scalars().all()
-    return StandardResponse(data=[CollaboratorResponse.model_validate(c) for c in collaborators])
+
+    resp: List[CollaboratorResponse] = []
+    if owner:
+        resp.append(CollaboratorResponse(
+            id=owner.id,
+            shop_id=shop.id,
+            name=owner.full_name or "Propriétaire",
+            phone=owner.phone_number or "—",
+            email=owner.email or "—",
+            role="Propriétaire",
+            status="Actif",
+            permissions=["*"],
+            is_owner=True
+        ))
+
+    for c in collaborators:
+        c_resp = CollaboratorResponse.model_validate(c)
+        c_resp.is_owner = False
+        resp.append(c_resp)
+
+    return StandardResponse(data=resp)
 
 @router.post(
     "/collaborators",
@@ -142,6 +168,10 @@ async def update_collaborator(
     import re
     from sqlalchemy import or_
 
+    # Empêcher de supprimer le propriétaire via l'API collaborateur
+    if shop.user_id == id:
+        raise BadRequestException("L'accès du propriétaire du compte est permanent et ne peut être supprimé.")
+
     stmt = select(Collaborator).where(Collaborator.id == id, Collaborator.shop_id == shop.id)
     res = await db.execute(stmt)
     collab = res.scalar_one_or_none()
@@ -202,6 +232,10 @@ async def delete_collaborator(
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """Supprimer un collaborateur."""
+    # Empêcher de supprimer le propriétaire via l'API collaborateur
+    if shop.user_id == id:
+        raise BadRequestException("L'accès du propriétaire du compte est permanent et ne peut être supprimé.")
+
     stmt = select(Collaborator).where(Collaborator.id == id, Collaborator.shop_id == shop.id)
     res = await db.execute(stmt)
     collab = res.scalar_one_or_none()
