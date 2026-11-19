@@ -4,6 +4,7 @@ from datetime import date
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import PermissionChecker, get_current_shop
@@ -28,7 +29,7 @@ async def get_accounting_dashboard(
 ):
     """Tableau de bord comptable complet (CA consolidé, charges par catégorie, résultat net, répartition des paiements et historique)."""
     # 1. Requête des commandes de la boutique
-    stmt_orders = select(Order).where(Order.shop_id == shop.id, Order.is_deleted == False).order_by(Order.created_at.desc())
+    stmt_orders = select(Order).options(selectinload(Order.items)).where(Order.shop_id == shop.id, Order.is_deleted == False).order_by(Order.created_at.desc())
     o_res = await db.execute(stmt_orders)
     orders = o_res.scalars().all()
 

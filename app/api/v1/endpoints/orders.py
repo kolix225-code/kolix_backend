@@ -82,6 +82,7 @@ async def list_orders(
             qr_payload=o.qr_payload,
             assigned_delivery_id=o.assigned_delivery_id,
             created_at=o.created_at,
+            product_name=(o.items[0].product_name if (o.items and len(o.items) > 0 and o.items[0].product_name) else (o.offer_label or "Produit Kolix")),
             items=[
                 OrderItemSchema(
                     product_id=it.product_id,
@@ -92,13 +93,6 @@ async def list_orders(
                 ) for it in o.items
             ]
         )
-        if not getattr(resp, "product_name", None):
-            p_name = None
-            if o.items and len(o.items) > 0 and o.items[0].product_name:
-                p_name = o.items[0].product_name
-            elif o.offer_label:
-                p_name = o.offer_label
-            resp.product_name = p_name or "Produit Kolix"
         response_items.append(resp)
 
     return StandardResponse(data=response_items)
