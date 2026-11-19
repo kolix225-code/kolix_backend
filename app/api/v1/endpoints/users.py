@@ -26,7 +26,7 @@ async def list_collaborators(
 ):
     """Liste tous les membres d'équipe de la boutique courante (Propriétaire + Collaborateurs)."""
     # 1. Obtenir le propriétaire du compte
-    stmt_owner = select(User).where(User.id == shop.user_id)
+    stmt_owner = select(User).where(User.id == shop.owner_id)
     res_owner = await db.execute(stmt_owner)
     owner = res_owner.scalar_one_or_none()
 
@@ -169,7 +169,7 @@ async def update_collaborator(
     from sqlalchemy import or_
 
     # Empêcher de supprimer le propriétaire via l'API collaborateur
-    if shop.user_id == id:
+    if shop.owner_id == id:
         raise BadRequestException("L'accès du propriétaire du compte est permanent et ne peut être supprimé.")
 
     stmt = select(Collaborator).where(Collaborator.id == id, Collaborator.shop_id == shop.id)
@@ -233,7 +233,7 @@ async def delete_collaborator(
 ):
     """Supprimer un collaborateur."""
     # Empêcher de supprimer le propriétaire via l'API collaborateur
-    if shop.user_id == id:
+    if shop.owner_id == id:
         raise BadRequestException("L'accès du propriétaire du compte est permanent et ne peut être supprimé.")
 
     stmt = select(Collaborator).where(Collaborator.id == id, Collaborator.shop_id == shop.id)
