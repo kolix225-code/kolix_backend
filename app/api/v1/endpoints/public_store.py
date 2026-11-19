@@ -109,6 +109,24 @@ async def checkout_cod_order(
 ):
     """Enregistrement d'une commande COD par l'acheteur final sur la boutique en ligne."""
     order = await OrderService.create_public_cod_order(db, data)
+    
+    # Notification WebSocket en temps réel à la boutique
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            order.shop_id,
+            "ORDER_CREATED",
+            {
+                "id": order.id,
+                "client_name": order.client_name,
+                "total_amount": float(order.total_amount),
+                "status": order.status
+            }
+        )
+        await ws_manager.broadcast_to_shop(order.shop_id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
+
     return StandardResponse(
         message="Votre commande a bien été enregistrée ! Paiement prévu à la livraison.",
         data={

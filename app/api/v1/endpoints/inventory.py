@@ -179,6 +179,23 @@ async def restock_product(
 
     await db.commit()
     await db.refresh(item)
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "STOCK_UPDATED",
+            {
+                "id": str(item.id),
+                "product_id": str(item.product_id),
+                "qty_remaining": item.qty_remaining,
+                "status": item.status
+            }
+        )
+        await ws_manager.broadcast_to_shop(shop.id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
     return StandardResponse(
         message="Stock réapprovisionné avec succès.",
         data=InventoryItemResponse(

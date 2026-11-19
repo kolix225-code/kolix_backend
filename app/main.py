@@ -85,3 +85,7 @@ async def health_check():
 # Inclusion de l'API v1
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# WebSocket direct root route
+from app.api.v1.endpoints.websocket import websocket_shop_endpoint
+app.websocket("/ws/{shop_id}")(websocket_shop_endpoint)
+

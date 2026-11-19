@@ -148,6 +148,18 @@ async def add_collaborator(
 
     await db.commit()
     await db.refresh(collab)
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "COLLABORATOR_UPDATED",
+            {"id": str(collab.id), "name": collab.name, "role": collab.role}
+        )
+    except Exception:
+        pass
+
     return StandardResponse(
         message=f"Collaborateur {collab.name} ajouté avec succès. Accès de connexion activés.",
         data=CollaboratorResponse.model_validate(collab)
@@ -219,6 +231,18 @@ async def update_collaborator(
 
     await db.commit()
     await db.refresh(collab)
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "COLLABORATOR_UPDATED",
+            {"id": str(collab.id), "name": collab.name, "role": collab.role}
+        )
+    except Exception:
+        pass
+
     return StandardResponse(message="Permissions et accès mis à jour.", data=CollaboratorResponse.model_validate(collab))
 
 @router.delete(
@@ -244,5 +268,17 @@ async def delete_collaborator(
 
     collab.is_deleted = True
     await db.commit()
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "COLLABORATOR_UPDATED",
+            {"id": str(collab.id), "action": "delete"}
+        )
+    except Exception:
+        pass
+
     return StandardResponse(message="Collaborateur retiré de la boutique.")
 

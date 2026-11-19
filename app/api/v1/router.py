@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     shops,
     users,
     webhooks,
+    websocket,
     whatsapp,
 )
 from app.api.v1.endpoints import wallet
@@ -39,4 +40,5 @@ api_router.include_router(media.router)
 api_router.include_router(ai.router)
 api_router.include_router(public_store.router)
 api_router.include_router(webhooks.router)
+api_router.include_router(websocket.router)
 

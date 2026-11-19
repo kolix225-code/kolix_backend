@@ -187,6 +187,23 @@ async def create_order(
     await db.commit()
     await db.refresh(new_order)
 
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "ORDER_CREATED",
+            {
+                "id": new_order.id,
+                "client_name": new_order.client_name,
+                "total_amount": float(new_order.total_amount),
+                "status": new_order.status
+            }
+        )
+        await ws_manager.broadcast_to_shop(shop.id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
+
     return StandardResponse(
         message=f"Commande {new_order.id} enregistrée avec succès.",
         data=OrderResponse(
@@ -305,6 +322,24 @@ async def update_order_status(
             db.add(trx)
 
     await db.commit()
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "ORDER_STATUS_CHANGED",
+            {
+                "id": order.id,
+                "status": order.status,
+                "old_status": old_status,
+                "total_amount": float(order.total_amount)
+            }
+        )
+        await ws_manager.broadcast_to_shop(shop.id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
+
     return StandardResponse(message=f"Commande {order.id} passée au statut '{data.status}'.", data={"id": order.id, "status": order.status})
 
 @router.post("/{id}/assign", response_model=StandardResponse[dict], dependencies=[Depends(PermissionChecker("Commandes"))])

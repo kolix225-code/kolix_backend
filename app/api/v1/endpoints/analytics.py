@@ -186,22 +186,23 @@ async def get_dashboard_analytics(
     # 5. Ventes par zone 100% réel
     zone_counts = {}
     for o in orders:
-        c = (o.city or "Abidjan").strip()
-        if "Abidjan" in c or c.lower() in ["cocody", "yopougon", "marcory", "plateau", "treichville", "koumassi", "port-bouët"]:
-            c = "Abidjan (Cocody, Yopougon, Marcory)"
+        c = (o.city or "").strip()
+        if not c:
+            continue
+        if "Abidjan" in c or c.lower() in ["cocody", "yopougon", "marcory", "plateau", "treichville", "koumassi", "port-bouët", "adjamé", "attécoubé", "abobo"]:
+            c = "Abidjan"
         zone_counts[c] = zone_counts.get(c, 0) + 1
 
     sorted_zones = sorted(zone_counts.items(), key=lambda x: x[1], reverse=True)
     zones = []
+    tot_zone_orders = sum(zone_counts.values())
     for c_name, count in sorted_zones:
-        pct = round((count / tot_o * 100)) if tot_o > 0 else 0
+        pct = round((count / tot_zone_orders * 100)) if tot_zone_orders > 0 else 0
         zones.append({
             "name": c_name,
             "percentage": pct,
             "formattedPercentage": f"{pct} %"
         })
-    if not zones:
-        zones = [{"name": "Abidjan (Cocody, Yopougon, Marcory)", "percentage": 100, "formattedPercentage": "100 %"}]
 
     # 6. Top Produits 100% réel
     prod_agg = {}
@@ -212,21 +213,16 @@ async def get_dashboard_analytics(
         prod_agg[pname]["sales"] += (o.quantity or 1)
         prod_agg[pname]["ca"] += float(o.total_amount)
 
-    stmt_prods = select(Product).where(Product.shop_id == shop.id, Product.is_deleted == False)
-    cat_prods = (await db.execute(stmt_prods)).scalars().all()
-    for cp in cat_prods:
-        if cp.name not in prod_agg:
-            prod_agg[cp.name] = {"sales": 0, "ca": 0.0}
-
     sorted_prods = sorted(prod_agg.items(), key=lambda x: (x[1]["ca"], x[1]["sales"]), reverse=True)
     top_products = []
     for rank, (pname, pinfo) in enumerate(sorted_prods[:5], 1):
-        top_products.append({
-            "rank": rank,
-            "name": pname,
-            "salesCount": str(pinfo["sales"]),
-            "caFormatted": f"{int(pinfo['ca']):,}".replace(",", " ") + " FCFA"
-        })
+        if pinfo["sales"] > 0 or pinfo["ca"] > 0:
+            top_products.append({
+                "rank": rank,
+                "name": pname,
+                "salesCount": str(pinfo["sales"]),
+                "caFormatted": f"{int(pinfo['ca']):,}".replace(",", " ") + " FCFA"
+            })
 
     # 7. Calendrier des livraisons dynamique
     import calendar
@@ -330,17 +326,26 @@ async def get_analytics_reports(
         val = (a / b) * 100
         return f"{val:.1f}".replace(".", ",") + " %"
 
-    funnel = [
-        {"label": "Visites boutique", "value": f"{int(visites):,}".replace(",", " "), "raw": visites, "step": ""},
-        {"label": "Vues fiche produit", "value": f"{int(vues_produit):,}".replace(",", " "), "raw": vues_produit, "step": "→ " + pct_fmt(vues_produit, visites)},
-        {"label": "Formulaires ouverts", "value": f"{int(formulaires):,}".replace(",", " "), "raw": formulaires, "step": "→ " + pct_fmt(formulaires, vues_produit)},
-        {"label": "Commandes reçues", "value": f"{int(cmd_recues):,}".replace(",", " "), "raw": cmd_recues, "step": "→ " + pct_fmt(cmd_recues, formulaires)},
-        {"label": "Commandes livrées", "value": f"{int(cmd_livrees):,}".replace(",", " "), "raw": cmd_livrees, "step": "→ " + pct_fmt(cmd_livrees, cmd_recues)},
-    ]
-
-    # Global conversion and abandonment rates
-    global_conversion = pct_fmt(cmd_livrees, visites)
-    cart_abandonment = pct_fmt(formulaires - cmd_recues, formulaires) if formulaires > cmd_recues else "0 %"
+    if cmd_recues == 0:
+        funnel = [
+            {"label": "Visites boutique", "value": "0", "raw": 0, "step": ""},
+            {"label": "Vues fiche produit", "value": "0", "raw": 0, "step": "→ 0 %"},
+            {"label": "Formulaires ouverts", "value": "0", "raw": 0, "step": "→ 0 %"},
+            {"label": "Commandes reçues", "value": "0", "raw": 0, "step": "→ 0 %"},
+            {"label": "Commandes livrées", "value": "0", "raw": 0, "step": "→ 0 %"},
+        ]
+        global_conversion = "0 %"
+        cart_abandonment = "0 %"
+    else:
+        funnel = [
+            {"label": "Visites boutique", "value": f"{int(visites):,}".replace(",", " "), "raw": visites, "step": ""},
+            {"label": "Vues fiche produit", "value": f"{int(vues_produit):,}".replace(",", " "), "raw": vues_produit, "step": "→ " + pct_fmt(vues_produit, visites)},
+            {"label": "Formulaires ouverts", "value": f"{int(formulaires):,}".replace(",", " "), "raw": formulaires, "step": "→ " + pct_fmt(formulaires, vues_produit)},
+            {"label": "Commandes reçues", "value": f"{int(cmd_recues):,}".replace(",", " "), "raw": cmd_recues, "step": "→ " + pct_fmt(cmd_recues, formulaires)},
+            {"label": "Commandes livrées", "value": f"{int(cmd_livrees):,}".replace(",", " "), "raw": cmd_livrees, "step": "→ " + pct_fmt(cmd_livrees, cmd_recues)},
+        ]
+        global_conversion = pct_fmt(cmd_livrees, visites)
+        cart_abandonment = pct_fmt(formulaires - cmd_recues, formulaires) if formulaires > cmd_recues else "0 %"
 
     # 3. Analyse des statuts de commande 100% réels
     status_counts = {"Livrée": 0, "En cours": 0, "Annulée": 0, "Reportée": 0, "Injoignable": 0, "Contestée": 0}
@@ -439,6 +444,8 @@ async def get_analytics_reports(
         units = stat["units"]
         ca_val = stat["ca"]
         deliv = stat["delivered"]
+        if units == 0 and ca_val == 0:
+            continue
         rate_val = (deliv / units) if units > 0 else 0.0
         share_val = (ca_val / total_prod_ca) if total_prod_ca > 0 else 0.0
         products_list.append({
@@ -456,8 +463,10 @@ async def get_analytics_reports(
     # 6. Ventes par zone géographique réelles
     zone_stats = {}
     for o in filtered_orders:
-        city = (o.city or "Abidjan").strip()
-        if "Abidjan" in city:
+        city = (o.city or "").strip()
+        if not city:
+            continue
+        if "Abidjan" in city or city.lower() in ["cocody", "yopougon", "marcory", "plateau", "treichville", "koumassi", "port-bouët", "adjamé", "attécoubé", "abobo"]:
             city_key = "Abidjan"
         else:
             city_key = city

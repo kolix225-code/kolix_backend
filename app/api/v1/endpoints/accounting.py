@@ -157,6 +157,24 @@ async def add_charge(
     db.add(charge)
     await db.commit()
     await db.refresh(charge)
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "ACCOUNTING_UPDATED",
+            {
+                "id": str(charge.id),
+                "type": "add",
+                "category": charge.category,
+                "amount": float(charge.amount)
+            }
+        )
+        await ws_manager.broadcast_to_shop(shop.id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
+
     return StandardResponse(message="Charge enregistrée avec succès.", data=ChargeResponse.model_validate(charge))
 
 @router.delete("/charges/{id}", response_model=StandardResponse[None], dependencies=[Depends(PermissionChecker("Comptabilité"))])
@@ -173,6 +191,22 @@ async def delete_charge(
         raise NotFoundException("Charge", str(id))
     charge.is_deleted = True
     await db.commit()
+
+    # Diffusion WebSocket temps réel
+    try:
+        from app.core.ws_manager import ws_manager
+        await ws_manager.broadcast_to_shop(
+            shop.id,
+            "ACCOUNTING_UPDATED",
+            {
+                "id": str(charge.id),
+                "type": "delete"
+            }
+        )
+        await ws_manager.broadcast_to_shop(shop.id, "DASHBOARD_UPDATE", {})
+    except Exception:
+        pass
+
     return StandardResponse(message="Charge supprimée avec succès.")
 
 
