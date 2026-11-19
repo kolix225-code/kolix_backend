@@ -1,9 +1,12 @@
 # app/api/v1/endpoints/auth.py
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, status
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_shop, get_current_user, oauth2_scheme
+from app.models.shop import Shop
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -61,16 +64,34 @@ async def login(
 
 @router.get("/me", response_model=StandardResponse[dict])
 async def get_me(
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
+    token: Annotated[Optional[str], Depends(oauth2_scheme)] = None,
+    shop: Annotated[Optional[Shop], Depends(get_current_shop)] = None
 ):
-    """Profil de l'utilisateur connecté."""
+    """Profil de l'utilisateur connecté avec permissions et boutique."""
+    permissions = ["*"]
+    role = current_user.role
+    if token:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            if "perms" in payload:
+                permissions = payload["perms"]
+            if "role" in payload:
+                role = payload["role"]
+        except Exception:
+            pass
+
     return StandardResponse(
         data={
             "id": str(current_user.id),
             "email": current_user.email,
             "full_name": current_user.full_name,
             "phone_number": current_user.phone_number,
-            "role": current_user.role,
+            "role": role,
+            "permissions": permissions,
+            "shop_id": str(shop.id) if shop else None,
+            "shop_domain": shop.domain if shop else None,
+            "shop_name": shop.name if shop else None,
             "is_verified": current_user.is_verified,
         }
     )

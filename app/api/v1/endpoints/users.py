@@ -54,7 +54,7 @@ async def add_collaborator(
     if not clean_phone:
         clean_phone = f"07{random.randint(10000000, 99999999)}"
 
-    collab_pwd = data.password.strip() if (data.password and len(data.password.strip()) >= 4) else "Kolix@2026!"
+    collab_pwd = data.password.strip() if (data.password and len(data.password.strip()) >= 4) else "kolix2026!"
 
     # 1. Vérifier si un compte User existe déjà avec cet email ou ce téléphone
     stmt_u = select(User).where(
