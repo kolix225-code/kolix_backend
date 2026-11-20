@@ -90,17 +90,23 @@ async def get_public_product(
     except Exception:
         pass
 
-    stmt = select(Product).where(cond, Product.is_deleted == False)
+    stmt = select(Product).options(selectinload(Product.shop).selectinload(Shop.customization)).where(cond, Product.is_deleted == False)
     res = await db.execute(stmt)
     prod = res.scalar_one_or_none()
     if not prod:
         # Fallback to first product
-        fb = await db.execute(select(Product).where(Product.is_deleted == False).limit(1))
+        fb = await db.execute(select(Product).options(selectinload(Product.shop).selectinload(Shop.customization)).where(Product.is_deleted == False).limit(1))
         prod = fb.scalar_one_or_none()
         if not prod:
             raise NotFoundException("Produit", slug)
 
-    return StandardResponse(data=ProductResponse.model_validate(prod))
+    resp = ProductResponse.model_validate(prod)
+    if prod.shop:
+        resp.shop_name = prod.shop.name
+        resp.shop_domain = prod.shop.domain
+        if prod.shop.customization:
+            resp.shop_logo = prod.shop.customization.logo_url
+    return StandardResponse(data=resp)
 
 @router.post("/orders/checkout", response_model=StandardResponse[dict], status_code=status.HTTP_201_CREATED)
 async def checkout_cod_order(

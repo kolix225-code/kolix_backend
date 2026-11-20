@@ -4,6 +4,7 @@ from typing import List, Optional
 from app.schemas.common import BaseSchema
 
 class ProductCreate(BaseSchema):
+    shop_id: Optional[uuid.UUID] = None
     name: str
     category: str
     price: float
@@ -48,6 +49,9 @@ class ProductResponse(BaseSchema):
     description: Optional[str] = None
     images: List[str]
     fiche_produit: Optional[dict] = None
+    shop_name: Optional[str] = None
+    shop_domain: Optional[str] = None
+    shop_logo: Optional[str] = None
 
 class BulkStatusRequest(BaseSchema):
     product_ids: List[uuid.UUID]

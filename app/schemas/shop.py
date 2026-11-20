@@ -5,8 +5,21 @@ from app.schemas.common import BaseSchema
 
 class ShopCreate(BaseSchema):
     name: str
-    slug: str
+    slug: Optional[str] = None
+    activity: Optional[str] = None
+    plan: Optional[str] = "Grow"
     accent_color: str = "#6C4CF1"
+    template_id: Optional[str] = "aura_eclat"
+
+class ShopUpdate(BaseSchema):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    domain: Optional[str] = None
+    custom_domain: Optional[str] = None
+    plan: Optional[str] = None
+    accent_color: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class ShopResponse(BaseSchema):
     id: uuid.UUID
@@ -20,6 +33,11 @@ class ShopResponse(BaseSchema):
     status: str
     is_active: bool
     accent_color: str
+    products_count: Optional[int] = 0
+    orders_count_7d: Optional[int] = 0
+    template_id: Optional[str] = "aura_eclat"
+    template_name: Optional[str] = "Kolix Essentiel"
+    logo_url: Optional[str] = None
 
 class StoreTemplateResponse(BaseSchema):
     id: uuid.UUID

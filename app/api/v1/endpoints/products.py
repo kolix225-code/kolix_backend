@@ -4,6 +4,7 @@ from typing import Annotated, List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.dependencies import PermissionChecker, get_current_shop
 from app.core.exceptions import NotFoundException
@@ -20,10 +21,16 @@ async def list_products(
     shop: Annotated[Shop, Depends(get_current_shop)],
     db: Annotated[AsyncSession, Depends(get_db)],
     category: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status")
+    status_filter: Optional[str] = Query(None, alias="status"),
+    shop_id: Optional[uuid.UUID] = Query(None)
 ):
     """Liste tous les produits du catalogue avec filtres facultatifs."""
-    stmt = select(Product).where(Product.shop_id == shop.id, Product.is_deleted == False)
+    target_shop_id = shop_id if shop_id else shop.id
+    stmt = (
+        select(Product)
+        .options(selectinload(Product.shop))
+        .where(Product.shop_id == target_shop_id, Product.is_deleted == False)
+    )
     if category and category != "all":
         stmt = stmt.where(Product.category == category)
     if status_filter and status_filter != "all":
@@ -32,7 +39,14 @@ async def list_products(
     stmt = stmt.order_by(Product.created_at.desc())
     res = await db.execute(stmt)
     products = res.scalars().all()
-    return StandardResponse(data=[ProductResponse.model_validate(p) for p in products])
+    results = []
+    for p in products:
+        item = ProductResponse.model_validate(p)
+        if p.shop:
+            item.shop_name = p.shop.name
+            item.shop_domain = p.shop.domain
+        results.append(item)
+    return StandardResponse(data=results)
 
 @router.post("", response_model=StandardResponse[ProductResponse], dependencies=[Depends(PermissionChecker("Produits"))])
 async def create_product(
@@ -41,11 +55,12 @@ async def create_product(
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """Créer un nouveau produit COD et initialiser sa fiche de stock associée."""
+    target_shop_id = data.shop_id if data.shop_id else shop.id
     unique_suffix = str(uuid.uuid4())[:6]
     base_slug = data.name.lower().replace(" ", "-")[:32]
     slug = f"{base_slug}-{unique_suffix}"
     prod = Product(
-        shop_id=shop.id,
+        shop_id=target_shop_id,
         name=data.name,
         slug=slug,
         category=data.category,
@@ -67,7 +82,7 @@ async def create_product(
     # Create associated inventory item
     sku = f"PRD-{str(uuid.uuid4())[:4].upper()}"
     inv = InventoryItem(
-        shop_id=shop.id,
+        shop_id=target_shop_id,
         product_id=prod.id,
         num=sku,
         qty_initial=data.stock_quantity,
@@ -86,16 +101,19 @@ async def create_product(
 @router.get("/{id}", response_model=StandardResponse[ProductResponse])
 async def get_product(
     id: uuid.UUID,
-    shop: Annotated[Shop, Depends(get_current_shop)],
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """Détails d'un produit avec images et caractéristiques."""
-    stmt = select(Product).where(Product.id == id, Product.shop_id == shop.id, Product.is_deleted == False)
+    stmt = select(Product).options(selectinload(Product.shop)).where(Product.id == id, Product.is_deleted == False)
     res = await db.execute(stmt)
     prod = res.scalar_one_or_none()
     if not prod:
         raise NotFoundException("Produit", str(id))
-    return StandardResponse(data=ProductResponse.model_validate(prod))
+    resp = ProductResponse.model_validate(prod)
+    if prod.shop:
+        resp.shop_name = prod.shop.name
+        resp.shop_domain = prod.shop.domain
+    return StandardResponse(data=resp)
 
 @router.put("/{id}", response_model=StandardResponse[ProductResponse], dependencies=[Depends(PermissionChecker("Produits"))])
 async def update_product(
