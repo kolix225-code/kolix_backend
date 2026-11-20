@@ -109,52 +109,15 @@ class AuthService:
         user.is_verified = True
 
         # Check if shop already exists
-        stmt_shop = select(Shop).where(Shop.owner_id == user.id)
+        stmt_shop = select(Shop).where(Shop.owner_id == user.id, Shop.is_deleted == False)
         shop_res = await db.execute(stmt_shop)
         shop = shop_res.scalar_one_or_none()
 
-        if not shop:
-            # Provision Default Shop
-            slug = f"shop-{user.full_name.lower().replace(' ', '-')[:12]}-{random.randint(100, 999)}"
-            domain = f"{slug}.kolix.shop"
-            shop = Shop(
-                owner_id=user.id,
-                name=f"Boutique {user.full_name}",
-                slug=slug,
-                domain=domain,
-                plan="Grow",
-                orders_count=0,
-                max_orders=1500,
-                status="En ligne",
-                is_active=True,
-                accent_color="#6C4CF1"
-            )
-            db.add(shop)
-            await db.flush()
-
-            # Create default Customization
-            custom = StoreCustomization(
-                shop_id=shop.id,
-                template_id="aura_eclat",
-                primary_color="#6C4CF1",
-                sections=[
-                    {"id": "hero", "label": "Bannière & Slogan", "enabled": True, "order": 1},
-                    {"id": "featured", "label": "Produit vedette", "enabled": True, "order": 2},
-                    {"id": "reviews", "label": "Avis vérifiés", "enabled": True, "order": 3},
-                    {"id": "form", "label": "Formulaire de commande COD", "enabled": True, "order": 4},
-                ]
-            )
-            db.add(custom)
-
-            # Create default Wallet
-            wallet = Wallet(shop_id=shop.id)
-            db.add(wallet)
-
-            # Create default Settings
-            st_settings = StoreSettings(shop_id=shop.id)
-            db.add(st_settings)
-
-            # Create Affiliate Profile
+        # Create Affiliate Profile if not exists
+        stmt_aff = select(Affiliate).where(Affiliate.user_id == user.id)
+        aff_res = await db.execute(stmt_aff)
+        aff = aff_res.scalar_one_or_none()
+        if not aff:
             aff_code = f"KX{user.full_name[:3].upper()}{random.randint(10, 99)}"
             aff = Affiliate(
                 user_id=user.id,
@@ -177,7 +140,7 @@ class AuthService:
             subject=user.id,
             role=user.role,
             permissions=["*"],
-            shop_id=str(shop.id)
+            shop_id=str(shop.id) if shop else None
         )
         refresh_token = create_refresh_token(subject=user.id)
 
@@ -188,8 +151,8 @@ class AuthService:
             email=user.email,
             name=user.full_name,
             role=user.role,
-            shop_id=shop.id,
-            shop_domain=shop.domain
+            shop_id=shop.id if shop else None,
+            shop_domain=shop.domain if shop else None
         )
 
     @staticmethod
