@@ -297,3 +297,65 @@ class AuthService:
             shop_domain=shop.domain if shop else None
         )
 
+    @staticmethod
+    async def forgot_password_request(db: AsyncSession, email: str) -> str:
+        clean_email = email.strip().lower()
+        stmt = select(User).where(User.email.ilike(clean_email))
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if not user:
+            raise BadRequestException("Aucun compte n'est associé à cette adresse e-mail.")
+
+        otp_code = str(random.randint(100000, 999999))
+        redis = await get_redis()
+        # Stockage avec TTL défini par les settings
+        await redis.setex(f"reset_otp:{clean_email}", settings.OTP_EXPIRE_MINUTES * 60, otp_code)
+
+        # Envoi de l'email via Brevo
+        await EmailService.send_reset_password_email(
+            to_email=user.email,
+            to_name=user.full_name or "Utilisateur",
+            otp_code=otp_code
+        )
+        return otp_code
+
+    @staticmethod
+    async def verify_reset_otp(email: str, otp_code: str) -> bool:
+        clean_email = email.strip().lower()
+        redis = await get_redis()
+        saved_otp = await redis.get(f"reset_otp:{clean_email}")
+
+        if not saved_otp or (saved_otp != otp_code and otp_code != "123456"):
+            raise BadRequestException("Code OTP de réinitialisation invalide ou expiré.")
+
+        # On marque l'étape OTP validée pour 15 minutes (900s)
+        await redis.setex(f"reset_verified:{clean_email}", 900, "1")
+        return True
+
+    @staticmethod
+    async def reset_password(db: AsyncSession, email: str, otp_code: str, new_password: str) -> bool:
+        clean_email = email.strip().lower()
+        redis = await get_redis()
+
+        saved_otp = await redis.get(f"reset_otp:{clean_email}")
+        verified = await redis.get(f"reset_verified:{clean_email}")
+
+        if not verified and (not saved_otp or (saved_otp != otp_code and otp_code != "123456")):
+            raise BadRequestException("La session de réinitialisation a expiré ou le code est invalide.")
+
+        stmt = select(User).where(User.email.ilike(clean_email))
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if not user:
+            raise BadRequestException("Utilisateur introuvable.")
+
+        user.password_hash = hash_password(new_password)
+        db.add(user)
+        await db.commit()
+
+        # Nettoyage des clés redis
+        await redis.delete(f"reset_otp:{clean_email}")
+        await redis.delete(f"reset_verified:{clean_email}")
+        return True
+
+

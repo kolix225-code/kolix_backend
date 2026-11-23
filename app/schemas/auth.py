@@ -47,3 +47,15 @@ class TokenResponse(BaseSchema):
 class RefreshTokenRequest(BaseSchema):
     refresh_token: str
 
+class ForgotPasswordRequest(BaseSchema):
+    email: EmailStr
+
+class VerifyResetOtpRequest(BaseSchema):
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6)
+
+class ResetPasswordRequest(BaseSchema):
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6)
+

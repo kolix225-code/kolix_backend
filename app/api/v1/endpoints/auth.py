@@ -14,6 +14,9 @@ from app.schemas.auth import (
     RegisterStep1Response,
     TokenResponse,
     VerifyOtpRequest,
+    ForgotPasswordRequest,
+    VerifyResetOtpRequest,
+    ResetPasswordRequest,
 )
 from app.schemas.common import StandardResponse
 from app.services.auth_service import AuthService
@@ -61,6 +64,42 @@ async def login(
         message="Connexion réussie.",
         data=tokens
     )
+
+@router.post("/forgot-password", response_model=StandardResponse[dict])
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """Étape 1 : Demande de réinitialisation de mot de passe et envoi du code OTP par email."""
+    otp = await AuthService.forgot_password_request(db, data.email)
+    return StandardResponse(
+        message="Code de réinitialisation envoyé avec succès à votre adresse e-mail.",
+        data={"email": data.email, "otp_debug": otp if settings.ENVIRONMENT == "development" else None}
+    )
+
+@router.post("/verify-reset-otp", response_model=StandardResponse[dict])
+async def verify_reset_otp(
+    data: VerifyResetOtpRequest
+):
+    """Étape 2 : Vérification du code OTP de réinitialisation reçu."""
+    await AuthService.verify_reset_otp(data.email, data.otp_code)
+    return StandardResponse(
+        message="Code de confirmation validé avec succès.",
+        data={"verified": True, "email": data.email}
+    )
+
+@router.post("/reset-password", response_model=StandardResponse[dict])
+async def reset_password(
+    data: ResetPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """Étape 3 : Définition du nouveau mot de passe."""
+    await AuthService.reset_password(db, data.email, data.otp_code, data.new_password)
+    return StandardResponse(
+        message="Votre mot de passe a été modifié avec succès. Vous pouvez maintenant vous connecter.",
+        data={"success": True}
+    )
+
 
 @router.get("/me", response_model=StandardResponse[dict])
 async def get_me(

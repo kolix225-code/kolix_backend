@@ -7,6 +7,9 @@ from app.schemas.auth import (
     LoginRequest,
     TokenResponse,
     RefreshTokenRequest,
+    ForgotPasswordRequest,
+    VerifyResetOtpRequest,
+    ResetPasswordRequest,
 )
 from app.schemas.user import CollaboratorCreate, CollaboratorUpdate, CollaboratorResponse
 from app.schemas.shop import (

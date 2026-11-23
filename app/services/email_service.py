@@ -157,3 +157,70 @@ class EmailService:
             to_name=to_name
         )
 
+    @classmethod
+    async def send_reset_password_email(cls, to_email: str, to_name: str, otp_code: str) -> bool:
+        """
+        Envoie le code OTP de réinitialisation de mot de passe par email via Brevo.
+        """
+        subject = f"Réinitialisation de votre mot de passe Kolix : {otp_code}"
+        expire_minutes = settings.OTP_EXPIRE_MINUTES
+
+        html_content = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Réinitialisation de votre mot de passe</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f5f7; padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 520px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="background: linear-gradient(135deg, #241D5E 0%, #6C4CF1 100%); padding: 36px 32px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">KOLIX</h1>
+              <p style="margin: 6px 0 0; color: #e0e7ff; font-size: 14px; font-weight: 500;">Sécurité du compte & Réinitialisation</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 36px 32px;">
+              <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 700; color: #0f172a;">Bonjour {to_name or 'cher utilisateur'},</h2>
+              <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #475569;">
+                Nous avons reçu une demande de réinitialisation du mot de passe associé à votre compte Kolix. Pour poursuivre, saisissez le code de sécurité temporaire ci-dessous :
+              </p>
+              <div style="background-color: #f8fafc; border: 2px dashed #6C4CF1; border-radius: 12px; padding: 24px; text-align: center; margin: 28px 0;">
+                <span style="display: block; font-size: 12px; font-weight: 700; color: #6C4CF1; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">Code de Réinitialisation</span>
+                <span style="font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #1e1b4b; display: inline-block;">{otp_code}</span>
+              </div>
+              <p style="margin: 0 0 20px; font-size: 13px; line-height: 1.5; color: #64748b; text-align: center;">
+                ⏱ Ce code expire dans <strong>{expire_minutes} minutes</strong>.<br>
+                Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail. Votre mot de passe actuel reste inchangé.
+              </p>
+              <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 28px 0 20px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94a3b8; text-align: center;">
+                🔒 Ne partagez jamais ce code. L'équipe Kolix ne vous le demandera jamais directement.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #f1f5f9;">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                © 2026 Kolix. Tous droits réservés.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+        return await cls.send_email(
+            to_email=to_email,
+            subject=subject,
+            html_content=html_content,
+            to_name=to_name
+        )
+
