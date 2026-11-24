@@ -123,7 +123,15 @@ async def update_product(
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """Modifier les attributs d'un produit."""
-    stmt = select(Product).where(Product.id == id, Product.shop_id == shop.id, Product.is_deleted == False)
+    stmt = (
+        select(Product)
+        .join(Shop, Product.shop_id == Shop.id)
+        .where(
+            Product.id == id,
+            (Product.shop_id == shop.id) | (Shop.owner_id == shop.owner_id),
+            Product.is_deleted == False
+        )
+    )
     res = await db.execute(stmt)
     prod = res.scalar_one_or_none()
     if not prod:
@@ -143,7 +151,14 @@ async def delete_product(
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
     """Archiver un produit."""
-    stmt = select(Product).where(Product.id == id, Product.shop_id == shop.id)
+    stmt = (
+        select(Product)
+        .join(Shop, Product.shop_id == Shop.id)
+        .where(
+            Product.id == id,
+            (Product.shop_id == shop.id) | (Shop.owner_id == shop.owner_id)
+        )
+    )
     res = await db.execute(stmt)
     prod = res.scalar_one_or_none()
     if not prod:
