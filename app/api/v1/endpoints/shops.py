@@ -243,6 +243,21 @@ async def update_store(
 
     if data.name is not None:
         shop.name = data.name.strip()
+    if data.slug is not None and data.slug.strip():
+        new_slug = re.sub(r"[^a-z0-9\-]+", "", data.slug.strip().lower()).strip("-")
+        if new_slug:
+            shop.slug = new_slug
+            shop.domain = f"{new_slug}.kolix.shop"
+    if data.domain is not None and data.domain.strip():
+        raw_dom = data.domain.strip().lower()
+        raw_dom = re.sub(r"^https?://", "", raw_dom).rstrip("/")
+        if not raw_dom.endswith(".kolix.shop") and not raw_dom.endswith(".kolix.ci") and "." not in raw_dom:
+            raw_dom = f"{raw_dom}.kolix.shop"
+        shop.domain = raw_dom
+        if raw_dom.endswith(".kolix.shop"):
+            extracted_slug = raw_dom.replace(".kolix.shop", "").strip("-")
+            if extracted_slug:
+                shop.slug = extracted_slug
     if data.custom_domain is not None:
         shop.custom_domain = data.custom_domain.strip().lower() if data.custom_domain else None
     if data.accent_color is not None:
