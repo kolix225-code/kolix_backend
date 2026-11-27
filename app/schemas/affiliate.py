@@ -29,3 +29,8 @@ class AffiliateSummaryResponse(BaseSchema):
 class TransferCommissionRequest(BaseSchema):
     amount: float
 
+class SubscribeWithCommissionRequest(BaseSchema):
+    plan_name: str # Start, Grow, Pro, Empire
+    duration_months: int = 1 # 1, 3, 6, 12
+
+

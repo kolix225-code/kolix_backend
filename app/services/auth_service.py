@@ -55,6 +55,11 @@ class AuthService:
         await redis.setex(f"otp:{full_phone}", settings.OTP_EXPIRE_MINUTES * 60, otp_code)
         await redis.setex(f"otp:{data.email.strip().lower()}", settings.OTP_EXPIRE_MINUTES * 60, otp_code)
 
+        # Sauvegarde du code partenaire si fourni
+        ref_candidate = (data.partner_code or data.promo_code or "").strip()
+        if ref_candidate:
+            await redis.setex(f"referral:{new_user.id}", settings.OTP_EXPIRE_MINUTES * 60, ref_candidate)
+
         # Envoi de l'OTP par email via Brevo
         await EmailService.send_otp_email(
             to_email=data.email,
@@ -122,9 +127,51 @@ class AuthService:
             aff = Affiliate(
                 user_id=user.id,
                 affiliate_code=aff_code,
-                affiliate_slug=user.full_name.lower().replace(" ", "")
+                affiliate_slug=user.full_name.lower().replace(" ", "")[:15],
+                available_balance=0.0,
+                total_earned=0.0,
+                is_locked=False
             )
             db.add(aff)
+
+        # Attribution du parrainage si code fourni lors de l'inscription
+        ref_code = await redis.get(f"referral:{user.id}")
+        if ref_code:
+            stmt_parrain = select(Affiliate).where(
+                or_(
+                    Affiliate.affiliate_code.ilike(ref_code.strip()),
+                    Affiliate.affiliate_slug.ilike(ref_code.strip())
+                )
+            )
+            parrain_res = await db.execute(stmt_parrain)
+            parrain = parrain_res.scalar_one_or_none()
+            if parrain and parrain.user_id != user.id:
+                from app.models.affiliate import AffiliateReferral
+                stmt_check = select(AffiliateReferral).where(
+                    AffiliateReferral.affiliate_id == parrain.id,
+                    AffiliateReferral.referred_user_name == user.full_name
+                )
+                existing_ref = (await db.execute(stmt_check)).scalar_one_or_none()
+                if not existing_ref:
+                    # Commission 20% sur l'abonnement initial (Plan Grow 10 000 FCFA -> 2 000 FCFA)
+                    comm = 2000.0
+                    shop_title = shop.name if shop else f"Boutique {user.full_name.split()[0]}"
+                    ref_entry = AffiliateReferral(
+                        affiliate_id=parrain.id,
+                        referred_shop_name=shop_title,
+                        referred_user_name=user.full_name,
+                        source=f"Code {parrain.affiliate_code}",
+                        plan="Grow",
+                        status="Actif",
+                        months_count=1,
+                        total_months=12,
+                        earned_total=comm,
+                        monthly_commission=comm
+                    )
+                    db.add(ref_entry)
+                    parrain.available_balance = float(parrain.available_balance or 0) + comm
+                    parrain.total_earned = float(parrain.total_earned or 0) + comm
+            await redis.delete(f"referral:{user.id}")
 
         await db.commit()
         await db.refresh(user)

@@ -14,6 +14,7 @@ class RegisterStep1Request(BaseSchema):
     country: str = "Côte d’Ivoire"
     source: Optional[str] = None
     promo_code: Optional[str] = None
+    partner_code: Optional[str] = None # Code partenaire / affiliation
 
 class RegisterStep1Response(BaseSchema):
     user_id: uuid.UUID

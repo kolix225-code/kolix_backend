@@ -14,6 +14,7 @@ from app.schemas.affiliate import (
     AffiliateReferralResponse,
     AffiliateSummaryResponse,
     TransferCommissionRequest,
+    SubscribeWithCommissionRequest,
 )
 from app.schemas.common import StandardResponse
 
@@ -34,10 +35,15 @@ async def get_affiliate_summary(
             user_id=current_user.id,
             affiliate_code=f"KX{current_user.full_name[:3].upper()}10",
             affiliate_slug=current_user.full_name.lower().replace(" ", "")[:15],
-            available_balance=145000.0,
-            total_earned=536000.0
+            available_balance=0.0,
+            total_earned=0.0,
+            is_locked=False
         )
         db.add(aff)
+        await db.commit()
+        await db.refresh(aff)
+    elif aff.is_locked:
+        aff.is_locked = False
         await db.commit()
         await db.refresh(aff)
 
@@ -114,4 +120,63 @@ async def transfer_commissions(
     await db.commit()
 
     return StandardResponse(message=f"{int(data.amount):,} FCFA transférés vers votre portefeuille Kolix !".replace(",", " "))
+
+@router.post("/subscribe-with-commissions", response_model=StandardResponse[dict])
+async def subscribe_with_commissions(
+    data: SubscribeWithCommissionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    shop: Annotated[Shop, Depends(get_current_shop)],
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    """Activer ou prolonger un abonnement Kolix en utilisant les commissions d'affiliation collectées."""
+    stmt = select(Affiliate).where(Affiliate.user_id == current_user.id)
+    res = await db.execute(stmt)
+    aff = res.scalar_one_or_none()
+    if not aff:
+        raise NotFoundException("Profil partenaire non trouvé.")
+
+    PLAN_PRICES = {
+        "Start": 5000,
+        "Grow": 10000,
+        "Pro": 15000,
+        "Empire": 50000
+    }
+    clean_plan = data.plan_name.replace("Kolix ", "").strip()
+    unit_cost = PLAN_PRICES.get(clean_plan, 10000)
+    duration = max(1, data.duration_months)
+    total_cost = unit_cost * duration
+
+    if float(aff.available_balance) < total_cost:
+        raise BadRequestException(
+            f"Solde de commissions insuffisant ({int(aff.available_balance):,} FCFA). "
+            f"L'abonnement Kolix {clean_plan} pour {duration} mois requiert {total_cost:,} FCFA."
+        )
+
+    # Déduction du solde disponible
+    aff.available_balance = float(aff.available_balance) - total_cost
+
+    full_plan_name = f"Kolix {clean_plan}"
+    if shop:
+        shop.plan = full_plan_name
+
+    payout = AffiliatePayout(
+        affiliate_id=aff.id,
+        amount=total_cost,
+        payout_type=f"Activation Abonnement · {full_plan_name} ({duration} mois)",
+        status="Validé"
+    )
+    db.add(payout)
+    await db.commit()
+    await db.refresh(aff)
+
+    return StandardResponse(
+        message=f"Félicitations ! Votre abonnement {full_plan_name} ({duration} mois) a été activé avec succès grâce à vos gains partenaires !",
+        data={
+            "plan": full_plan_name,
+            "duration_months": duration,
+            "amount_debited": total_cost,
+            "remaining_balance": float(aff.available_balance)
+        }
+    )
+
 
